@@ -37,6 +37,45 @@ import os
 
 directory = Path(__file__).resolve().parent
 
+
+import subprocess
+import sys
+
+IS_WINDOWS = sys.platform == 'win32'
+
+def find_cuda_home():
+    '''Finds the CUDA install path.'''
+    # Guess #1
+    cuda_home = os.environ.get('CUDA_HOME') or os.environ.get('CUDA_PATH')
+    if cuda_home is None:
+        # Guess #2
+        try:
+            which = 'where' if IS_WINDOWS else 'which'
+#             print('.', which)
+            nvcc = subprocess.check_output(
+                [which, 'nvcc'], env = dict(PATH='%s:%s/bin' % (os.environ['PATH'], sys.exec_prefix))).decode().rstrip('\r\n')
+#             print(nvcc)
+            cuda_home = os.path.dirname(os.path.dirname(nvcc))
+        except Exception:
+            # Guess #3
+            if IS_WINDOWS:
+                cuda_homes = glob.glob(
+                    'C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v*.*')
+                if len(cuda_homes) == 0:
+                    cuda_home = ''
+                else:
+                    cuda_home = cuda_homes[0]
+            else:
+                cuda_home = '/usr/local/cuda'
+            if not os.path.exists(cuda_home):
+                cuda_home = None
+    if cuda_home and not torch.cuda.is_available():
+        print("No CUDA runtime is found, using CUDA_HOME='{}'".format(cuda_home))
+    os.environ['CUDA_HOME'] = cuda_home
+    return cuda_home
+
+find_cuda_home()
+
 neighborSearch = load(name="neighborSearch", 
     sources=[os.path.join(directory, "neighSearch.cpp"), os.path.join(directory, "neighSearch_cuda.cu")], 
     verbose=False, extra_cflags=['-fopenmp', '-O3', '-march=native'])

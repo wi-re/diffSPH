@@ -310,7 +310,7 @@ def plotMesh(xx,yy,z, axis, fig):
     cbar.ax.tick_params(labelsize=8)
     
     
-from noise.generator import generatePerlin, generateSimplex, generateOctaveNoise
+from .noise.generator import generatePerlin, generateSimplex, generateOctaveNoise
 def createNoiseFunction(n = 256, res = 2, octaves = 2, lacunarity = 2, persistance = 0.5, seed = 1336):
     # noise = generate_fractal_noise_2d(shape = (n,n), res = (res,res), octaves = octaves, persistence = persistance, lacunarity = lacunarity, tileable = (False, False), seed = seed)
 #     noise = Octave(n, octaves = octaves, lacunarity = lacunarity, persistance = persistance, seed = seed)
