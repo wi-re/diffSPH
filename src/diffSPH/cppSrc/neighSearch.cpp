@@ -251,8 +251,8 @@ std::vector<torch::Tensor> buildNeighborList(
     auto colTensor = at::empty({totalElements}, torch::TensorOptions().dtype(torch::kInt));
     std::size_t offset = 0;
     for (std::size_t i = 0; i < globalRows.size(); ++i){
-        memcpy(rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
-        memcpy(colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
+        memcpy((std::byte*)rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
+        memcpy((std::byte*)colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
         offset += globalCols[i].size() * sizeof(int32_t);
     }
     return {rowTensor, colTensor};
@@ -323,8 +323,8 @@ std::vector<torch::Tensor> buildNeighborListUnsortedPerParticle(
     auto colTensor = at::empty({totalElements}, torch::TensorOptions().dtype(torch::kInt));
     std::size_t offset = 0;
     for (std::size_t i = 0; i < globalRows.size(); ++i){
-        memcpy(rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
-        memcpy(colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
+        memcpy((std::byte*)rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
+        memcpy((std::byte*)colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
         offset += globalCols[i].size() * sizeof(int32_t);
     }
     return {rowTensor, colTensor};
@@ -402,8 +402,8 @@ std::vector<torch::Tensor> buildNeighborListAsymmetric(
     auto colTensor = at::empty({totalElements}, torch::TensorOptions().dtype(torch::kInt));
     std::size_t offset = 0;
     for (std::size_t i = 0; i < globalRows.size(); ++i){
-        memcpy(rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
-        memcpy(colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
+        memcpy((std::byte*) rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
+        memcpy((std::byte*) colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
         offset += globalCols[i].size() * sizeof(int32_t);
     }
     return {rowTensor, colTensor};

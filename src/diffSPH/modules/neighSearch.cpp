@@ -6,7 +6,7 @@
 #include <torch/extension.h>
 
 #include <vector>
-
+#include <cstddef>
 /*
 std::vector<torch::Tensor> sortPointSet( torch::Tensor points, torch::Tensor supports){
   auto hMax = at::max(supports);
@@ -113,7 +113,7 @@ std::pair<int32_t, int32_t> queryHashMap(int32_t qIDx, int32_t qIDy, at::TensorA
     return {-1,-1}; 
 }
 
-
+#ifdef __CUDACC__
 #define CHECK_CUDA(x) TORCH_CHECK(x.device().is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CONTIGUOUS(x) TORCH_CHECK(x.is_contiguous(), #x " must be contiguous")
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
@@ -168,6 +168,7 @@ std::vector<torch::Tensor> buildNeighborListCUDA(
 
   return {neighborList.first, neighborList.second};
 }
+#endif 
 
 std::vector<torch::Tensor> buildNeighborList(
     torch::Tensor queryParticles_, torch::Tensor support_,
@@ -251,8 +252,8 @@ std::vector<torch::Tensor> buildNeighborList(
     auto colTensor = at::empty({totalElements}, torch::TensorOptions().dtype(torch::kInt));
     std::size_t offset = 0;
     for (std::size_t i = 0; i < globalRows.size(); ++i){
-        memcpy(rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
-        memcpy(colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
+        memcpy((char*)rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
+        memcpy((char*)colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
         offset += globalCols[i].size() * sizeof(int32_t);
     }
     return {rowTensor, colTensor};
@@ -323,8 +324,8 @@ std::vector<torch::Tensor> buildNeighborListUnsortedPerParticle(
     auto colTensor = at::empty({totalElements}, torch::TensorOptions().dtype(torch::kInt));
     std::size_t offset = 0;
     for (std::size_t i = 0; i < globalRows.size(); ++i){
-        memcpy(rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
-        memcpy(colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
+        memcpy((char*)rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
+        memcpy((char*)colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
         offset += globalCols[i].size() * sizeof(int32_t);
     }
     return {rowTensor, colTensor};
@@ -402,8 +403,8 @@ std::vector<torch::Tensor> buildNeighborListAsymmetric(
     auto colTensor = at::empty({totalElements}, torch::TensorOptions().dtype(torch::kInt));
     std::size_t offset = 0;
     for (std::size_t i = 0; i < globalRows.size(); ++i){
-        memcpy(rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
-        memcpy(colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
+        memcpy((char*) rowTensor.data_ptr() + offset, globalRows[i].data(), globalRows[i].size() * sizeof(int32_t));
+        memcpy((char*) colTensor.data_ptr() + offset, globalCols[i].data(), globalCols[i].size() * sizeof(int32_t));
         offset += globalCols[i].size() * sizeof(int32_t);
     }
     return {rowTensor, colTensor};
@@ -411,7 +412,9 @@ std::vector<torch::Tensor> buildNeighborListAsymmetric(
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+  #ifdef __CUDACC__
   m.def("buildNeighborListCUDA", &buildNeighborListCUDA, "LLTM backward (CUDA)");
+  #endif
   m.def("buildNeighborList", &buildNeighborList, "LLTM backward (CUDA)");
   m.def("buildNeighborListAsymmetric", &buildNeighborListAsymmetric, "LLTM backward (CUDA)");
   m.def("buildNeighborListUnsortedPerParticle", &buildNeighborListUnsortedPerParticle, "LLTM backward (CUDA)");

@@ -71,14 +71,35 @@ def find_cuda_home():
                 cuda_home = None
     if cuda_home and not torch.cuda.is_available():
         print("No CUDA runtime is found, using CUDA_HOME='{}'".format(cuda_home))
-    os.environ['CUDA_HOME'] = cuda_home
+    if cuda_home is not None:
+        os.environ['CUDA_HOME'] = cuda_home
     return cuda_home
 
 find_cuda_home()
 
-neighborSearch = load(name="neighborSearch", 
-    sources=[os.path.join(directory, "neighSearch.cpp"), os.path.join(directory, "neighSearch_cuda.cu")], 
-    verbose=False, extra_cflags=['-fopenmp', '-O3', '-march=native'])
+import platform
+if platform.system() == "Darwin":
+
+    os.environ['LDFLAGS'] = '%s %s' % (os.environ['LDFLAGS'] if 'LDFLAGS' in os.environ else '', '-L/opt/homebrew/opt/llvm/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++')
+    os.environ['PATH'] = '%s %s' % ('/opt/homebrew/opt/llvm/bin:$PATH"', os.environ['PATH'])
+    os.environ['LDFLAGS'] = '%s %s' % (os.environ['LDFLAGS'] if 'LDFLAGS' in os.environ else '', "-L/opt/homebrew/opt/libomp/lib")
+    os.environ['CPPFLAGS'] = '%s %s' % (os.environ['CPPFLAGS'] if 'CPPFLAGS' in os.environ else '', "-I/opt/homebrew/opt/llvm/include")
+    os.environ['LDFLAGS'] = '%s %s' % (os.environ['LDFLAGS'], "-L/opt/homebrew/opt/libomp/lib")
+    os.environ['CPPFLAGS'] = '%s %s' % (os.environ['CPPFLAGS'], "-I/opt/homebrew/opt/llvm/include:-I/opt/homebrew/opt/libomp/include")
+    os.environ['CC'] = '/opt/homebrew/opt/llvm/bin/clang'
+    os.environ['CXX'] = '/opt/homebrew/opt/llvm/bin/clang'
+    nvcc = subprocess.check_output(
+        ['which', 'clang'], env = dict(PATH='%s:%s/bin' % (os.environ['PATH'], sys.exec_prefix))).decode().rstrip('\r\n')
+    print(nvcc)
+
+if torch.cuda.is_available():
+    neighborSearch = load(name="neighborSearch", 
+        sources=[os.path.join(directory, "neighSearch.cpp"), os.path.join(directory, "neighSearch_cuda.cu")], 
+        verbose=False, extra_cflags=['-fopenmp', '-O3', '-march=native'])
+else:
+    neighborSearch = load(name="neighborSearch", 
+        sources=[os.path.join(directory, "neighSearch.cpp")], 
+        verbose=True, extra_cflags=['-fopenmp', '-O3', '-march=native'])
 # neighborSearch = load_inline(name="neighborSearch", cpp_sources=['''// #define _OPENMP
 # #include <algorithm>
 # #include <ATen/Parallel.h>
