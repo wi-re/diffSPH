@@ -73,6 +73,7 @@ def find_cuda_home():
         print("No CUDA runtime is found, using CUDA_HOME='{}'".format(cuda_home))
     if cuda_home is not None:
         os.environ['CUDA_HOME'] = cuda_home
+    print('Cuda compiler:', cuda_home)
     return cuda_home
 
 find_cuda_home()
@@ -95,7 +96,7 @@ if platform.system() == "Darwin":
 if torch.cuda.is_available():
     neighborSearch = load(name="neighborSearch", 
         sources=[os.path.join(directory, "neighSearch.cpp"), os.path.join(directory, "neighSearch_cuda.cu")], 
-        verbose=False, extra_cflags=['-fopenmp', '-O3', '-march=native'])
+        verbose=False, extra_cflags=['-fopenmp', '-O3', '-march=native', '-DCUDA_VERSION'])
 else:
     neighborSearch = load(name="neighborSearch", 
         sources=[os.path.join(directory, "neighSearch.cpp")], 
