@@ -79,126 +79,209 @@ def cpow(q, p : int):
 #     b2 = 1.0 + 4.0 * q
 #     return b1 * b2 * C / h**2  
     
-class Wendland2:
-    @staticmethod
-    @torch.jit.script
-    def kernel(rij, hij, dim : int = 2):
-        C = [5/4, 7 / np.pi, 21/ (2 * np.pi)]
+# class Wendland2:
+#     C = [5/4, 7 / np.pi, 21/ (2 * np.pi)]
+#     @staticmethod
+#     @torch.jit.script
+#     def k(q, dim: int = 2):        
+#         if dim == 1:
+#             return cpow(1 - q, 3) * (1 + 3 * q)
+#         else:
+#             return cpow(1 - q, 4) * (1 + 4 * q)
+#     @staticmethod
+#     @torch.jit.script
+#     def dkdq(q, dim: int = 2):        
+#         if dim == 1:
+#             return -12 * q * cpow(1 - q, 2)
+#         else:
+#             return -20 * q * cpow(1 - q, 3)
+#     @staticmethod
+#     @torch.jit.script
+#     def d2kdq2(q, dim: int = 2):        
+#         if dim == 1:
+#             return -12 * (3 * q **2 - 4 * q + 1)
+#         else:
+#             return 20 * (4 * q - 1) * cpow(1-q, 2)
+#     @staticmethod
+#     @torch.jit.script
+#     def kernel(rij, hij, dim : int = 2):
+#         return Wendland2.k(rij, dim) * Wendland2.C[dim - 1] / hij**dim
         
-        if dim == 1:
-            k = cpow(1 - rij, 3) * (1 + 3 * rij)
-        else:
-            k = cpow(1 - rij, 4) * (1 + 4 * rij)
-        return k * C[dim - 1] / hij**dim
-        
-    @staticmethod
-    @torch.jit.script
-    def kernelGradient(rij, xij, hij, dim : int = 2):
-        C = [5/4, 7 / np.pi, 21/ (2 * np.pi)]
-        
-        if dim == 1:
-            k = -12 * rij * cpow(1 - rij, 2)
-        else:
-            k = -20 * rij * cpow(1 - rij, 3)
-        return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
-class Wendland4:
-    @staticmethod
-    @torch.jit.script
-    def kernel(rij, hij, dim : int = 2):
-        C = [3/2, 9 / np.pi, 495/ (32 * np.pi)]
-        
-        if dim == 1:
-            k = cpow(1 - rij, 5) * (1 + 5 * rij + 8 * rij**2)
-        else:
-            k = cpow(1 - rij, 6) * (1 + 6 * rij + 35/3 * rij **2)
-        return k * C[dim - 1] / hij**dim
-        
-    @staticmethod
-    @torch.jit.script
-    def kernelGradient(rij, xij, hij, dim : int = 2):
-        C = [3/2, 9 / np.pi, 495/ (32 * np.pi)]
-        
-        if dim == 1:
-            k = -14 * rij * (4 *rij + 1) * (1 - rij)**4
-        else:
-            k = -56/3 * rij * (5 * rij + 1) * (1 - rij)**5
-        return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]        
-class Wendland6:
-    @staticmethod
-    @torch.jit.script
-    def kernel(rij, hij, dim : int = 2):
-        C = [55/32, 78 / (7 * np.pi), 1365/ (64 * np.pi)]
-        
-        if dim == 1:
-            k = cpow(1 - rij, 7) * (1 + 7 * rij + 19 * rij**2 + 21 * rij**3)
-        else:
-            k = cpow(1 - rij, 8) * (1 + 8 * rij + 25 * rij**2 + 32 * rij**3)
-        return k * C[dim - 1] / hij**dim
-        
-    @staticmethod
-    @torch.jit.script
-    def kernelGradient(rij, xij, hij, dim : int = 2):
-        C = [55/32, 78 / (7 * np.pi), 1365/ (64 * np.pi)]
-        
-        if dim == 1:
-            k = -6 * rij * (35 * rij**2 + 18 * rij + 3) * (1 - rij)**6
-        else:
-            k = -22 * rij * (16 * rij**2 + 7 *rij + 1) * (1 - rij)**7
-        return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
-class CubicSpline:
-    @staticmethod
-    @torch.jit.script
-    def kernel(rij, hij, dim : int = 2):
-        C = [8/3, 80 / (7 * np.pi), 16/ (np.pi)]
-        k = cpow(1-rij, 3) - 4 * cpow(1/2 - rij,3)
-        return k * C[dim - 1] / hij**dim
-        
-    @staticmethod
-    @torch.jit.script
-    def kernelGradient(rij, xij, hij, dim : int = 2):
-        C = [8/3, 80 / (7 * np.pi), 16/ (np.pi)]
-        k = -3 * cpow(1-rij, 2) + 12 * cpow(1/2 - rij,2)
-        return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
-class QuarticSpline:
-    @staticmethod
-    @torch.jit.script
-    def kernel(rij, hij, dim : int = 2):
-        C = [5**5/768, 5**6 * 3 / (2398 * np.pi), 5**6/ (512 * np.pi)]
-        k = cpow(1-rij, 4) - 5 * cpow(3/5 - rij, 4) + 10 * cpow(1/5 - rij, 4)
-        return k * C[dim - 1] / hij**dim
-        
-    @staticmethod
-    @torch.jit.script
-    def kernelGradient(rij, xij, hij, dim : int = 2):
-        C = [5**5/768, 5**6 * 3 / (2398 * np.pi), 5**6/ (512 * np.pi)]
-        k = -4 * cpow(1-rij, 3) + 20 * cpow(3/5 - rij, 3) - 40 * cpow(1/5 - rij, 3)
-        return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
-class QuinticSpline:
-    @staticmethod
-    @torch.jit.script
-    def kernel(rij, hij, dim : int = 2):
-        C = [3**5/40, 3**7 * 7 / (478 * np.pi), 3**7/ (40 * np.pi)]
-        k = cpow(1-rij, 5) - 6 * cpow(2/3 - rij, 5) + 15 * cpow(1/3 - rij, 5)
-        return k * C[dim - 1] / hij**dim
-        
-    @staticmethod
-    @torch.jit.script
-    def kernelGradient(rij, xij, hij, dim : int = 2):
-        C = [3**5/40, 3**7 * 7 / (478 * np.pi), 3**7/ (40 * np.pi)]
-        k = -5 * cpow(1-rij, 4) + 30 * cpow(2/3 - rij, 4) - 75 * cpow(1/3 - rij, 4)
-        return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
+#     @staticmethod
+#     @torch.jit.script
+#     def kernelGradient(rij, xij, hij, dim : int = 2):
+#         return xij * (Wendland2.dkdq(rij, dim) * Wendland2.C[dim - 1] / hij**(dim + 1))[:,None]
     
-def getKernel(kernel: str = 'Wendland2'):
-    if kernel == 'Wendland2':
-        return Wendland2
-    elif kernel == 'Wendland4':
-        return Wendland4
-    elif kernel == 'Wendland6':
-        return Wendland6
-    elif kernel == 'CubicSpline':
-        return CubicSpline
-    elif kernel == 'QuarticSpline':
-        return QuarticSpline
-    elif kernel == 'QuinticSpline':
-        return QuinticSpline
-    else: return Wendland2
+#     @staticmethod
+#     @torch.jit.script
+#     def kernelLaplacian(rij, hij, dim : int = 2):
+#         return (((dim - 1) / (rij + 1e-7 * hij)) * Wendland2.dkdq(rij, dim) * hij + Wendland2.d2kdq2(rij, dim)) * Wendland2.C[dim - 1] / hij**(dim + 2)
+
+import diffSPH.kernelFunctions.Wendland2 as Wendland2
+
+# class Wendland4:
+#     @staticmethod
+#     @torch.jit.script
+#     def kernel(rij, hij, dim : int = 2):
+#         C = [3/2, 9 / np.pi, 495/ (32 * np.pi)]
+        
+#         if dim == 1:
+#             k = cpow(1 - rij, 5) * (1 + 5 * rij + 8 * rij**2)
+#         else:
+#             k = cpow(1 - rij, 6) * (1 + 6 * rij + 35/3 * rij **2)
+#         return k * C[dim - 1] / hij**dim
+        
+#     @staticmethod
+#     @torch.jit.script
+#     def kernelGradient(rij, xij, hij, dim : int = 2):
+#         C = [3/2, 9 / np.pi, 495/ (32 * np.pi)]
+        
+#         if dim == 1:
+#             k = -14 * rij * (4 *rij + 1) * (1 - rij)**4
+#         else:
+#             k = -56/3 * rij * (5 * rij + 1) * (1 - rij)**5
+#         return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]        
+# class Wendland6:
+#     @staticmethod
+#     @torch.jit.script
+#     def kernel(rij, hij, dim : int = 2):
+#         C = [55/32, 78 / (7 * np.pi), 1365/ (64 * np.pi)]
+        
+#         if dim == 1:
+#             k = cpow(1 - rij, 7) * (1 + 7 * rij + 19 * rij**2 + 21 * rij**3)
+#         else:
+#             k = cpow(1 - rij, 8) * (1 + 8 * rij + 25 * rij**2 + 32 * rij**3)
+#         return k * C[dim - 1] / hij**dim
+        
+#     @staticmethod
+#     @torch.jit.script
+#     def kernelGradient(rij, xij, hij, dim : int = 2):
+#         C = [55/32, 78 / (7 * np.pi), 1365/ (64 * np.pi)]
+        
+#         if dim == 1:
+#             k = -6 * rij * (35 * rij**2 + 18 * rij + 3) * (1 - rij)**6
+#         else:
+#             k = -22 * rij * (16 * rij**2 + 7 *rij + 1) * (1 - rij)**7
+#         return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
+# class CubicSpline:
+#     @staticmethod
+#     @torch.jit.script
+#     def kernel(rij, hij, dim : int = 2):
+#         C = [8/3, 80 / (7 * np.pi), 16/ (np.pi)]
+#         k = cpow(1-rij, 3) - 4 * cpow(1/2 - rij,3)
+#         return k * C[dim - 1] / hij**dim
+        
+#     @staticmethod
+#     @torch.jit.script
+#     def kernelGradient(rij, xij, hij, dim : int = 2):
+#         C = [8/3, 80 / (7 * np.pi), 16/ (np.pi)]
+#         k = -3 * cpow(1-rij, 2) + 12 * cpow(1/2 - rij,2)
+#         return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
+# class QuarticSpline:
+#     @staticmethod
+#     @torch.jit.script
+#     def kernel(rij, hij, dim : int = 2):
+#         C = [5**5/768, 5**6 * 3 / (2398 * np.pi), 5**6/ (512 * np.pi)]
+#         k = cpow(1-rij, 4) - 5 * cpow(3/5 - rij, 4) + 10 * cpow(1/5 - rij, 4)
+#         return k * C[dim - 1] / hij**dim
+        
+#     @staticmethod
+#     @torch.jit.script
+#     def kernelGradient(rij, xij, hij, dim : int = 2):
+#         C = [5**5/768, 5**6 * 3 / (2398 * np.pi), 5**6/ (512 * np.pi)]
+#         k = -4 * cpow(1-rij, 3) + 20 * cpow(3/5 - rij, 3) - 40 * cpow(1/5 - rij, 3)
+#         return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
+# class QuinticSpline:
+#     @staticmethod
+#     @torch.jit.script
+#     def kernel(rij, hij, dim : int = 2):
+#         C = [3**5/40, 3**7 * 7 / (478 * np.pi), 3**7/ (40 * np.pi)]
+#         k = cpow(1-rij, 5) - 6 * cpow(2/3 - rij, 5) + 15 * cpow(1/3 - rij, 5)
+#         return k * C[dim - 1] / hij**dim
+        
+#     @staticmethod
+#     @torch.jit.script
+#     def kernelGradient(rij, xij, hij, dim : int = 2):
+#         C = [3**5/40, 3**7 * 7 / (478 * np.pi), 3**7/ (40 * np.pi)]
+#         k = -5 * cpow(1-rij, 4) + 30 * cpow(2/3 - rij, 4) - 75 * cpow(1/3 - rij, 4)
+#         return xij * (k * C[dim - 1] / hij**(dim + 1))[:,None]
+    
+# def getKernel(kernel: str = 'Wendland2'):
+#     if kernel == 'Wendland2':
+#         return Wendland2
+#     elif kernel == 'Wendland4':
+#         return Wendland4
+#     elif kernel == 'Wendland6':
+#         return Wendland6
+#     elif kernel == 'CubicSpline':
+#         return CubicSpline
+#     elif kernel == 'QuarticSpline':
+#         return QuarticSpline
+#     elif kernel == 'QuinticSpline':
+#         return QuinticSpline
+#     else: return Wendland2
+
+
+# For Kernel Normalization:
+# in 3D: https://www.wolframalpha.com/input?i2d=true&i=Integrate%5BIntegrate%5BIntegrate%5BPower%5B%5C%2840%291-q%5C%2841%29%2C3%5DPower%5Bq%2C2%5DSin%5B%CF%86%5D%2C%7B%CF%86%2C0%2C%CF%80%7D%5D%2C%7B%CE%98%2C0%2C2%CF%80%7D%5D%2C%7Bq%2C0%2C1%7D%5D
+# in 2D: https://www.wolframalpha.com/input?i2d=true&i=Integrate%5BIntegrate%5BPower%5B%5C%2840%291-q%5C%2841%29%2C3%5D%2C%7B%CE%98%2C0%2C2%CF%80%7D%5D%2C%7Bq%2C0%2C1%7D%5D
+# in 1D: https://www.wolframalpha.com/input?i2d=true&i=Integrate%5BPower%5B%5C%2840%291-q%5C%2841%29%2C3%5D%2C%7Bq%2C0%2C1%7D%5D
+
+import diffSPH.kernelFunctions.Wendland2 as Wendland2
+import diffSPH.kernelFunctions.Wendland4 as Wendland4
+import diffSPH.kernelFunctions.Wendland6 as Wendland6
+import diffSPH.kernelFunctions.CubicSpline as CubicSpline
+import diffSPH.kernelFunctions.QuarticSpline as QuarticSpline
+import diffSPH.kernelFunctions.QuinticSpline as QuinticSpline
+
+import diffSPH.kernelFunctions.Spiky as Spiky
+import diffSPH.kernelFunctions.ViscosityKernel as ViscosityKernel
+import diffSPH.kernelFunctions.Poly6 as Poly6
+import diffSPH.kernelFunctions.CohesionKernel as CohesionKernel
+import diffSPH.kernelFunctions.AdhesionKernel as AdhesionKernel
+class KernelWrapper:
+    def __init__(self, module):
+        self.kernel = module.kernel
+        self.kernelGradient = module.kernelGradient
+        self.kernelLaplacian = module.kernelLaplacian
+
+def getKernel(kernel = 'Wendland2'):
+    if kernel == 'Wendland2': return KernelWrapper(Wendland2)
+    if kernel == 'Wendland4': return KernelWrapper(Wendland4)
+    if kernel == 'Wendland6': return KernelWrapper(Wendland6)
+    if kernel == 'CubicSpline': return KernelWrapper(CubicSpline)
+    if kernel == 'QuarticSpline': return KernelWrapper(QuarticSpline)
+    if kernel == 'QuinticSpline': return KernelWrapper(QuinticSpline)
+
+    if kernel == 'Spiky': return KernelWrapper(Spiky)
+    if kernel == 'ViscosityKernel': return KernelWrapper(ViscosityKernel)
+    if kernel == 'CohesionKernel': return KernelWrapper(CohesionKernel)
+    if kernel == 'AdhesionKernel': return KernelWrapper(AdhesionKernel)
+    if kernel == 'Poly6': return KernelWrapper(Poly6)
+
+# @torch.jit.script
+# def getKernel(kernel : str = 'Wendland2'):
+#     if kernel == 'Wendland2': return Wendland2.kernel
+#     elif kernel == 'Wendland4': return Wendland4.kernel
+#     elif kernel == 'Wendland6': return Wendland6.kernel
+#     elif kernel == 'CubicSpline': return CubicSpline.kernel
+#     elif kernel == 'QuarticSpline': return QuarticSpline.kernel
+#     elif kernel == 'QuinticSpline': return QuinticSpline.kernel
+
+# @torch.jit.script
+# def getKernelGradient(kernel : str = 'Wendland2'):
+#     if kernel == 'Wendland2': return Wendland2.kernelGradient
+#     elif kernel == 'Wendland4': return Wendland4.kernelGradient
+#     elif kernel == 'Wendland6': return Wendland6.kernelGradient
+#     elif kernel == 'CubicSpline': return CubicSpline.kernelGradient
+#     elif kernel == 'QuarticSpline': return QuarticSpline.kernelGradient
+#     elif kernel == 'QuinticSpline': return QuinticSpline.kernelGradient
+
+# @torch.jit.script
+# def getKernelLaplacian(kernel : str = 'Wendland2'):
+#     if kernel == 'Wendland2': return Wendland2.kernelLaplacian
+#     elif kernel == 'Wendland4': return Wendland4.kernelLaplacian
+#     elif kernel == 'Wendland6': return Wendland6.kernelLaplacian
+#     elif kernel == 'CubicSpline': return CubicSpline.kernelLaplacian
+#     elif kernel == 'QuarticSpline': return QuarticSpline.kernelLaplacian
+#     elif kernel == 'QuinticSpline': return QuinticSpline.kernelLaplacian
