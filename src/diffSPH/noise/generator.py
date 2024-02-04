@@ -74,6 +74,7 @@ def generateSimplex(shape, freq, dim = 2, seed = 42, device = 'cpu', dtype = tor
                     noise[ix,iy] += _noise4(freq * nx / np.pi, freq * ny / np.pi, freq * nz / np.pi, freq * nw / np.pi, perm)
             return xx, yy, torch.tensor(noise, device = device, dtype = dtype)
         if dim == 3:
+            raise Exception('Not implemented yet (noise is not periodic)')
             xx,yy,zz = torch.meshgrid(x,y,z, indexing = 'xy')
             p = torch.stack((xx,yy,zz), axis = -1).flatten().reshape((-1,3)).numpy()
             noise = []        
