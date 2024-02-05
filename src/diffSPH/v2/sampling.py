@@ -73,3 +73,36 @@ def sampleRegular(nx: int = 32, minExtent : float | List[float] = -1, maxExtent 
         xx, yy, zz = torch.meshgrid(lins[0],lins[1], lins[2], indexing = 'xy')
         p = torch.stack((xx,yy, zz), dim = -1).flatten(0,2)
         return p
+    
+
+from matplotlib.path import Path
+from skimage.draw import polygon2mask
+from scipy.ndimage import distance_transform_edt
+
+def polygonToSDF(polygon, minDomain = [-1, -1], maxDomain = [1,1], sdfResolution = 128):
+    scale_x = sdfResolution / (maxDomain[0] - minDomain[0])
+    scale_y = sdfResolution / (maxDomain[1] - minDomain[1])
+    scale = max(scale_x, scale_y)
+
+    scaledPolygon = (polygon - np.array(minDomain)) * scale
+    mask = polygon2mask((sdfResolution, sdfResolution), scaledPolygon)
+    inside_distance = distance_transform_edt(mask)
+    outside_distance = distance_transform_edt(1 - mask)
+    signed_distance = outside_distance - inside_distance
+
+    return signed_distance / scale
+
+def maskWithSDF(x, sdf, minDomain, maxDomain):
+    sdf_query = lambda x, sdf, minDomain, maxDomain: sdf[int((x[1] - minDomain[1]) / (maxDomain[1] - minDomain[1]) * sdf.shape[0]), int((x[0] - minDomain[0]) / (maxDomain[0] - minDomain[0]) * sdf.shape[1])]
+    distances = torch.tensor([sdf_query(p, sdf, minDomain, maxDomain) for p in x.detach().cpu().numpy()])
+    mask = distances < 0
+    return mask, distances
+
+def maskWithPolygon(x, polygon):
+    path = Path(polygon)
+    mask = torch.tensor(path.contains_points(x.detach().cpu().numpy()))
+    return mask
+
+def maskWithFunction(x, implicitFunction):
+    mask = implicitFunction(x) < 0
+    return mask

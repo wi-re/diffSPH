@@ -31,7 +31,7 @@ def radiusNaive(x, y, hx, hy, periodic : Optional[List[bool]] = None, minDomain 
 
     return ii, jj, distanceMatrix[adjacencyDense], distanceMatrices[adjacencyDense], supports
 
-@torch.jit.script
+# @torch.jit.script
 def neighborSearch(x, y, hx, hy, periodic : Optional[List[bool]] = None, minDomain = None, maxDomain = None, mode : str = 'gather', algorithm : str = 'naive'):
     periodicity = [False] * x.shape[1] if periodic is None else periodic
     
