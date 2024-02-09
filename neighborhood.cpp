@@ -198,7 +198,7 @@ torch::Tensor countNeighbors(
                     hashTable_, hashMapLength, 
                     cellTable_, numCells_,
                     offsets,
-                    hCell, minDomain_, maxDomain_, periodicTensor, searchMode, defaultOptions);
+                    hCell, minDomain_, maxDomain_, periodicTensor, searchMode);
             #endif
     }else{
         at::parallel_for(0, nQuery, 0, [&](int32_t start, int32_t end){
@@ -209,7 +209,7 @@ torch::Tensor countNeighbors(
                     hashTableAccessor, hashMapLength, \
                     celTableAccessor, numCellsAccessor,\
                     offsetAccessor,\
-                    hCell, minDomain, maxDomain, periodicity, searchMode, defaultOptions
+                    hCell, minDomain, maxDomain, periodicity, searchMode
                 if(dim == 1)
                     countNeighborsForParticle<1>(args);
                 else if(dim == 2)
@@ -406,7 +406,7 @@ std::pair<torch::Tensor, torch::Tensor> buildNeighborList(
                     hashTable_, hashMapLength, 
                     cellTable_, numCells_,
                     offsets,
-                    hCell, minDomain_, maxDomain_, periodicTensor, searchMode, defaultOptions);
+                    hCell, minDomain_, maxDomain_, periodicTensor, searchMode);
         #endif
     }else{
         at::parallel_for(0, nQuery, 0, [&](int32_t start, int32_t end){
@@ -417,7 +417,7 @@ std::pair<torch::Tensor, torch::Tensor> buildNeighborList(
                     hashTableAccessor, hashMapLength,\
                     cellTableAccessor, numCellsAccessor,\
                     offsetAccessor,\
-                    hCell, minDomain, maxDomain, periodicity, searchMode, defaultOptions
+                    hCell, minDomain, maxDomain, periodicity, searchMode
                 if(dim == 1)
                     buildNeighborhood<1>(args);
                 else if(dim == 2)
