@@ -94,11 +94,11 @@ if platform.system() == "Darwin":
     print(nvcc)
 
 if torch.cuda.is_available():
-    neighborSearch = load(name="neighborSearch", 
+    neighborSearch = load(name="neighborSearchv1", 
         sources=[os.path.join(directory, "neighSearch.cpp"), os.path.join(directory, "neighSearch_cuda.cu")], 
         verbose=False, extra_cflags=['-fopenmp', '-O3', '-march=native', '-DCUDA_VERSION'])
 else:
-    neighborSearch = load(name="neighborSearch", 
+    neighborSearch = load(name="neighborSearchv1", 
         sources=[os.path.join(directory, "neighSearch.cpp")], 
         verbose=True, extra_cflags=['-fopenmp', '-O3', '-march=native'])
 # neighborSearch = load_inline(name="neighborSearch", cpp_sources=['''// #define _OPENMP
