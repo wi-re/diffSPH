@@ -30,6 +30,16 @@ __global__ void countNeighborsForParticleCudaDispatcher(int32_t numParticles,
 }
 
 #include <cuda_runtime.h>
+void cuda_error_check() {
+    cudaError_t error = cudaGetLastError();
+    if (error != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorString(error));
+    }
+    error = cudaDeviceSynchronize();
+    if (error != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorString(error));
+    }
+}
 
 template<typename Func, typename... Ts>
 void launchKernel(Func kernel, int numParticles, Ts&&... args) {
@@ -39,18 +49,20 @@ void launchKernel(Func kernel, int numParticles, Ts&&... args) {
 
     // Compute the maximum potential block size for the kernel
     cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, kernel);
+    // cuda_error_check();
     gridSize = (numParticles + blockSize - 1) / blockSize;
 
     kernel<<<gridSize, blockSize>>>(numParticles, std::forward<Ts>(args)...);
+    // cuda_error_check();
 }
 
 
-void buildNeighborhoodCuda(const torch::Tensor& neighborOffsets, torch::Tensor neighborList_i, torch::Tensor neighborList_j,
-    const torch::Tensor& queryPositions, const torch::Tensor& querySupport, int searchRange,
-    const torch::Tensor& sortedPositions, const torch::Tensor& sortedSupport,
-    const torch::Tensor& hashTable, int hashMapLength,
-    const torch::Tensor& cellTable, const torch::Tensor& numCells,
-    const torch::Tensor& offsets, float hCell, const torch::Tensor& minDomain, const torch::Tensor& maxDomain, const torch::Tensor& periodicity,
+void buildNeighborhoodCuda(torch::Tensor neighborOffsets, torch::Tensor neighborList_i, torch::Tensor neighborList_j,
+    torch::Tensor queryPositions, torch::Tensor querySupport, int searchRange,
+    torch::Tensor sortedPositions, torch::Tensor sortedSupport,
+    torch::Tensor hashTable, int hashMapLength,
+    torch::Tensor cellTable, torch::Tensor numCells,
+    torch::Tensor offsets, float hCell, torch::Tensor minDomain, torch::Tensor maxDomain, torch::Tensor periodicity,
     supportMode searchMode) {
     int32_t numParticles = queryPositions.size(0);
     
@@ -78,17 +90,19 @@ hCell, minDomain.packed_accessor32<float,1, traits>(), maxDomain.packed_accessor
         // buildNeighborhoodCudaDispatcher<3><<<blocks, threads>>>(args);
     else throw std::runtime_error("Unsupported dimensionality");
 
+    // cuda_error_check();
+
 #undef args
 }
 
 void countNeighborsForParticleCuda(
     torch::Tensor neighborCounters, 
-    const torch::Tensor& queryPositions, const torch::Tensor& querySupport, int searchRange, 
-    const torch::Tensor& sortedPositions, const torch::Tensor& sortedSupport,
-    const torch::Tensor& hashTable, int hashMapLength,
-    const torch::Tensor& cellTable, const torch::Tensor& numCellsVec, 
-    const torch::Tensor& offsets,
-    float hCell, const torch::Tensor& minDomain, const torch::Tensor& maxDomain, const torch::Tensor& periodicity,
+    torch::Tensor queryPositions, torch::Tensor querySupport, int searchRange, 
+    torch::Tensor sortedPositions, torch::Tensor sortedSupport,
+    torch::Tensor hashTable, int hashMapLength,
+    torch::Tensor cellTable, torch::Tensor numCellsVec, 
+    torch::Tensor offsets,
+    float hCell, torch::Tensor minDomain, torch::Tensor maxDomain, torch::Tensor periodicity,
     supportMode searchMode) {
     int32_t numParticles = queryPositions.size(0);
     int32_t threads = 32;
@@ -110,10 +124,10 @@ void countNeighborsForParticleCuda(
         launchKernel(countNeighborsForParticleCudaDispatcher<1>, args);
         // countNeighborsForParticleCudaDispatcher<1><<<blocks, threads>>>(args);
     else if (dim == 2)
-        launchKernel(countNeighborsForParticleCudaDispatcher<1>, args);
+        launchKernel(countNeighborsForParticleCudaDispatcher<2>, args);
         // countNeighborsForParticleCudaDispatcher<2><<<blocks, threads>>>(args);
     else if (dim == 3)
-        launchKernel(countNeighborsForParticleCudaDispatcher<1>, args);
+        launchKernel(countNeighborsForParticleCudaDispatcher<3>, args);
         // countNeighborsForParticleCudaDispatcher<3><<<blocks, threads>>>(args);
     else throw std::runtime_error("Unsupported dimensionality");
 

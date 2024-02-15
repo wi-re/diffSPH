@@ -33,7 +33,7 @@ using cptr_t = torch::PackedTensorAccessor32<T, dim, traits>;
 template<typename T, std::size_t dim>
 using tensor_t = torch::TensorAccessor<T, dim, traits, int32_t>;
 template<typename T, std::size_t dim>
-using ctensor_t = const torch::TensorAccessor<T, dim, traits, int32_t>&;
+using ctensor_t = torch::TensorAccessor<T, dim, traits, int32_t>;
 
 // Simple enum to specify the support mode
 enum struct supportMode{
@@ -276,12 +276,12 @@ hostDeviceInline auto countNeighborsForParticle(int32_t i,
 
 void countNeighborsForParticleCuda(
     torch::Tensor neighborCounters, 
-    const torch::Tensor& queryPositions, const torch::Tensor& querySupport, int searchRange, 
-    const torch::Tensor& sortedPositions, const torch::Tensor& sortedSupport,
-    const torch::Tensor& hashTable, int hashMapLength,
-    const torch::Tensor& cellTable, const torch::Tensor& numCellsVec, 
-    const torch::Tensor& offsets,
-    float hCell, const torch::Tensor& minDomain, const torch::Tensor& maxDomain, const torch::Tensor& periodicity,
+    torch::Tensor queryPositions, torch::Tensor querySupport, int searchRange, 
+    torch::Tensor sortedPositions, torch::Tensor sortedSupport,
+    torch::Tensor hashTable, int hashMapLength,
+    torch::Tensor cellTable, torch::Tensor numCellsVec, 
+    torch::Tensor offsets,
+    float hCell, torch::Tensor minDomain, torch::Tensor maxDomain, torch::Tensor periodicity,
     supportMode searchMode) ;
     
 template<std::size_t dim>
@@ -324,10 +324,10 @@ hostDeviceInline auto buildNeighborhood(int32_t i,
         });
 }
 void buildNeighborhoodCuda(
-    const torch::Tensor& neighborOffsets, torch::Tensor neighborList_i, torch::Tensor neighborList_j,
-    const torch::Tensor& queryPositions, const torch::Tensor& querySupport, int searchRange,
-    const torch::Tensor& sortedPositions, const torch::Tensor& sortedSupport,
-    const torch::Tensor& hashTable, int hashMapLength,
-    const torch::Tensor& cellTable, const torch::Tensor& numCells,
-    const torch::Tensor& offsets, float hCell, const torch::Tensor& minDomain, const torch::Tensor& maxDomain, const torch::Tensor& periodicity,
+    torch::Tensor neighborOffsets, torch::Tensor neighborList_i, torch::Tensor neighborList_j,
+    torch::Tensor queryPositions, torch::Tensor querySupport, int searchRange,
+    torch::Tensor sortedPositions, torch::Tensor sortedSupport,
+    torch::Tensor hashTable, int hashMapLength,
+    torch::Tensor cellTable, torch::Tensor numCells,
+    torch::Tensor offsets, float hCell, torch::Tensor minDomain, torch::Tensor maxDomain, torch::Tensor periodicity,
     supportMode searchMode);
