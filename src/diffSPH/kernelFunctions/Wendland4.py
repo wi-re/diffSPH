@@ -18,9 +18,9 @@ def dkdq(q, dim: int = 2):
 @torch.jit.script
 def d2kdq2(q, dim: int = 2):        
     if dim == 1:
-        return 14 * (24 * q**2 -3 *q -1) * (1-q)**3
+        return 14 * (24 * q**2 -3 *q -1) * cpow(1-q, 3)
     else:
-        return 56/3 * (35 *q**2 -4*q -1) *(1-q)**4
+        return 56/3 * (35 *q**2 -4*q -1) *cpow(1-q,4)
     
 @torch.jit.script
 def C_d(dim : int):
@@ -38,4 +38,6 @@ def kernelGradient(rij, xij, hij, dim : int = 2):
 
 @torch.jit.script
 def kernelLaplacian(rij, hij, dim : int = 2):
-    return (torch.where(rij > 1e-7, ((dim - 1) / (rij * hij + 1e-7 * hij)) * dkdq(rij + 1e-7, dim) * hij + d2kdq2(rij, dim), 0)) * C_d(dim) / hij**(dim + 2)
+    return ((torch.where(rij > -1e-7, ((dim - 1) / (rij *hij + 1e-7 * hij)) * dkdq(rij + 1e-7, dim) * hij, 0) + d2kdq2(rij, dim)) * C_d(dim)) / hij**(dim + 2)
+
+    # return (torch.where(rij > 1e-7, ((dim - 1) / (rij * hij + 1e-7 * hij)) * dkdq(rij + 1e-7, dim) * hij + d2kdq2(rij, dim), 0)) * C_d(dim) / hij**(dim + 2)
