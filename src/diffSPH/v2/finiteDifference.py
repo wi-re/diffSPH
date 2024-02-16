@@ -208,3 +208,24 @@ def computeGradient(fx, extent, dim = 2, accuracy = 1):
     if wasScalar:
         output = output.flatten(dim, dim+1)
     return output
+
+
+def stencilFunction(fn, p, stencil, dx, dim, order):
+    # print('p', p.shape)
+    # print('stencil', stencil.shape, stencil)
+
+    offsets = p.new_zeros(stencil.shape[0], p.shape[1])
+    offsets[:,dim] = stencil
+    # print('p', p.shape)
+    # print('offsets', offsets.shape, offsets)
+    
+    offset_positions = (p[:, None,:] + offsets[None,:,:] * dx).view(-1, p.shape[1])
+    # print('offset_positions', offset_positions.shape, offset_positions)
+    functionValues = fn(offset_positions).view(p.shape[0], -1)
+    # print('functionValues', functionValues.shape, functionValues)
+    result = torch.sum(stencil * functionValues, dim = -1) / dx**order
+
+    return result
+
+def continuousGradient(fn, p, stencil, dx, order):
+    return torch.stack([stencilFunction(fn, p, stencil, dx, d, order) for d in range(p.shape[1])], dim = -1)
