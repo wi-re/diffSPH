@@ -5,8 +5,7 @@ from torchCompactRadius import radiusSearch
 
 
 def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic : Optional[List[bool]] = None, minDomain = None, maxDomain = None, mode : str = 'gather', algorithm : str = 'compact'):
-    periodicity = [False] * x.shape[1] if periodic is None else periodic
-    
+    periodicity = [False] * x.shape[1] if periodic is None else (periodic if isinstance(periodic, list) else [periodic] * x.shape[1])
     if minDomain is not None and isinstance(minDomain, list):
         minD = torch.tensor(minDomain).to(x.device).type(x.dtype)
     else:
@@ -15,6 +14,11 @@ def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic 
         maxD = torch.tensor(maxDomain).to(x.device).type(x.dtype)
     else:
         maxD = maxDomain
+
+    pos_x = torch.stack([x[:,i] if not periodic_i else torch.remainder(x[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
+    pos_y = torch.stack([y[:,i] if not periodic_i else torch.remainder(y[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
+    
+    
     if isinstance(hx, float) and (hy is None or isinstance(hy, float)):
         if mode == 'gather':
             fixedSupport = hx
@@ -22,11 +26,11 @@ def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic 
             fixedSupport = hy
         else:
             fixedSupport = (hx + hy)/2
-        i, j = radiusSearch(x, y, 
+        i, j = radiusSearch(pos_x, pos_y, 
                             fixedSupport, 
                             periodicity = periodicity, domainMin = minD, domainMax = maxD, mode = mode, algorithm = algorithm)
     else:
-        i, j = radiusSearch(x, y, 
+        i, j = radiusSearch(pos_x, pos_y, 
                         (hx if isinstance(hx, torch.Tensor) else torch.ones(x.shape[0]).to(x.device).to(x.dtype) * hx, hy if isinstance(hy, torch.Tensor) else torch.ones(y.shape[0]).to(y.device).to(y.dtype) * hy), 
                         periodicity = periodicity, domainMin = minD, domainMax = maxD, mode = mode, algorithm = algorithm)
 
@@ -44,7 +48,7 @@ def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic 
     
 
 
-    xij = y[j] - x[i]
+    xij = pos_y[j] - pos_x[i]
     if isinstance(periodic, bool):
         periodicity = [periodic] * dim
     else:

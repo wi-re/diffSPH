@@ -241,9 +241,62 @@ import diffSPH.kernelFunctions.CohesionKernel as CohesionKernel
 import diffSPH.kernelFunctions.AdhesionKernel as AdhesionKernel
 class KernelWrapper:
     def __init__(self, module):
-        self.kernel = module.kernel
-        self.kernelGradient = module.kernelGradient
-        self.kernelLaplacian = module.kernelLaplacian
+        self.module = module
+        # for attr_name in dir(module):
+        #     attr = getattr(module, attr_name)
+        #     if callable(attr):
+        #         setattr(self, attr_name, attr)
+    def __getattr__(self, name):
+        return getattr(self.module, name)
+    
+    def C_d(self, dim : int):
+        return self.module.C_d(dim)
+
+    def kernel(self, rij, hij, dim : int = 2):
+        return self.module.kernel(rij, hij, dim)
+    
+    def kernelGradient(self, rij, xij, hij, dim : int = 2):
+        return self.module.kernelGradient(rij, xij, hij, dim)
+    
+    def kernelLaplacian(self, rij, hij, dim : int = 2):
+        return self.module.kernelLaplacian(rij, hij, dim)
+    
+    def Jacobi(self, rij, xij, hij, dim : int = 2):
+        return self.module.kernelGradient(rij, xij, hij, dim)
+
+    def Hessian2D(self, rij, xij, hij, dim : int = 2):
+        hessian = torch.zeros(rij.shape[0], 2, 2, device=rij.device, dtype=rij.dtype)
+        factor = self.module.C_d(dim) / hij**(dim)
+
+        r_ij = rij * hij
+        x_ij = xij * r_ij.unsqueeze(-1)
+        q_ij = rij
+
+        termA_x = x_ij[:,0]**2 / (hij * r_ij    + 1e-5 * hij)**2 * self.module.d2kdq2(q_ij, dim = dim)
+        termA_y = x_ij[:,1]**2 / (hij * r_ij    + 1e-5 * hij)**2 * self.module.d2kdq2(q_ij, dim = dim)
+
+        termB_x = torch.where(r_ij / hij > 1e-5, 1 /(hij * r_ij + 1e-6 * hij),0) * self.module.dkdq(q_ij, dim = dim)
+        termB_y = torch.where(r_ij / hij > 1e-5, 1 /(hij * r_ij + 1e-6 * hij),0) * self.module.dkdq(q_ij, dim = dim)
+
+        termC_x = - (x_ij[:,0]**2) / (hij * r_ij**3 + 1e-5 * hij) * self.module.dkdq(q_ij, dim = dim)
+        termC_y = - (x_ij[:,1]**2) / (hij * r_ij**3 + 1e-5 * hij) * self.module.dkdq(q_ij, dim = dim)
+                
+        d2Wdx2 = factor * (termA_x + termB_x + termC_x + 1/hij**2 * torch.where(q_ij < 1e-5, self.module.d2kdq2(torch.tensor(0.), dim = dim), 0))
+        d2Wdy2 = factor * (termA_y + termB_y + termC_y + 1/hij**2 * torch.where(q_ij < 1e-5, self.module.d2kdq2(torch.tensor(0.), dim = dim), 0))
+
+        d2Wdxy = self.module.C_d(dim) * hij**(-dim) * torch.where(q_ij > -1e-7, \
+            ( x_ij[:,0] * x_ij[:,1]) / (hij * r_ij **2 + 1e-5 * hij) * (1 / hij * self.module.d2kdq2(q_ij, dim = dim) - 1 / (r_ij + 1e-3 * hij) * self.module.dkdq(q_ij, dim = dim)),0)
+        d2Wdyx = d2Wdxy
+            
+        hessian[:,0,0] = torch.where(q_ij <= 1, d2Wdx2, 0)
+        hessian[:,1,1] = torch.where(q_ij <= 1, d2Wdy2, 0)
+        hessian[:,0,1] = torch.where(q_ij <= 1, d2Wdxy, 0)
+        hessian[:,1,0] = torch.where(q_ij <= 1, d2Wdyx, 0)
+
+        return hessian
+
+
+
 
 def getKernel(kernel = 'Wendland2'):
     if kernel == 'Wendland2': return KernelWrapper(Wendland2)
