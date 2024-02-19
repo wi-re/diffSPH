@@ -6,6 +6,8 @@ from torchCompactRadius import radiusSearch
 
 def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic : Optional[List[bool]] = None, minDomain = None, maxDomain = None, mode : str = 'gather', algorithm : str = 'compact'):
     periodicity = [False] * x.shape[1] if periodic is None else (periodic if isinstance(periodic, list) else [periodic] * x.shape[1])
+    if isinstance(periodic, torch.Tensor):
+        periodicity = periodic.detach().cpu().numpy().tolist()
     if minDomain is not None and isinstance(minDomain, list):
         minD = torch.tensor(minDomain).to(x.device).type(x.dtype)
     else:
@@ -112,3 +114,16 @@ def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic 
 #     rij_normed = rij / hij
 
 #     return i, j, rij_normed, xij_normed, hij
+
+
+def fluidNeighborSearch(simulationState: dict, config: dict):
+    i, j, rij, xij, hij, Wij, gradWij = neighborSearch(simulationState['fluidPositions'], simulationState['fluidPositions'], simulationState['fluidSupports'], simulationState['fluidSupports'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'])
+    neighborDict = {
+        'indices': (i, j),
+        'distances': rij,
+        'vectors': xij,
+        'supports': hij,
+        'kernels': Wij,
+        'gradients': gradWij,
+    }
+    return neighborDict

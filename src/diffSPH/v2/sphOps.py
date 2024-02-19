@@ -16,6 +16,19 @@ def sphInterpolation(
     return scatter_sum(kq, neighborhood[0], dim = 0, dim_size = numParticles)
 
 @torch.jit.script 
+def sphDensityInterpolation(
+        masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
+        densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
+        quantities : tuple[torch.Tensor, torch.Tensor],                             # Tuple of particle quantities for (i,j)
+        neighborhood : tuple[torch.Tensor, torch.Tensor], kernels : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels ij
+        numParticles : int):                                                        # Ancillary information
+    j = neighborhood[1]
+    kq = masses[1][j] * kernels
+    
+    return scatter_sum(kq, neighborhood[0], dim = 0, dim_size = numParticles)
+
+
+@torch.jit.script 
 def sphGradient(
         masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
         densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
@@ -195,6 +208,8 @@ def sphOperation(
         numParticles : int,                                                                                         # Ancillary information
         operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div',
         kernelLaplacians : Optional[torch.Tensor] = None):           # Operation to perform
+    if operation == 'density':
+        return sphDensityInterpolation(masses, densities, quantities, neighborhood, kernels, numParticles)
     if operation == 'interpolate':
         return sphInterpolation(masses, densities, quantities, neighborhood, kernels, numParticles)
     if operation == 'gradient':
@@ -210,3 +225,23 @@ def sphOperation(
         div = sphDivergence(masses, densities, (grad, grad), neighborhood, kernelGradients, numParticles, type = gradientMode, mode = divergenceMode)
         return div
     
+
+def sphOperationFluidState(fluidState, quantities : tuple[torch.Tensor, torch.Tensor], operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div'):
+    if operation == 'density':
+        return sphDensityInterpolation(
+            (fluidState['fluidMasses'], fluidState['fluidMasses']), 
+            (fluidState['fluidMasses'], fluidState['fluidMasses']),
+            (fluidState['fluidMasses'], fluidState['fluidMasses']), 
+            fluidState['fluidNeighborhood']['indices'], 
+            fluidState['fluidNeighborhood']['kernels'], 
+            fluidState['numParticles'])
+    return sphOperation(
+        (fluidState['fluidMasses'], fluidState['fluidMasses']), 
+        (fluidState['fluidDensities'], fluidState['fluidDensities']) if 'fluidDensities' in fluidState else (None, None),
+        quantities, 
+        fluidState['fluidNeighborhood']['indices'], 
+        fluidState['fluidNeighborhood']['kernels'], fluidState['fluidNeighborhood']['gradients'], 
+        fluidState['fluidNeighborhood']['distances'], fluidState['fluidNeighborhood']['vectors'], fluidState['fluidNeighborhood']['supports'], 
+        fluidState['numParticles'], 
+        operation = operation, gradientMode = gradientMode, divergenceMode = divergenceMode, 
+        kernelLaplacians = fluidState['fluidNeighborhood']['laplacians'] if 'laplacians' in fluidState['fluidNeighborhood'] else None)

@@ -206,3 +206,25 @@ def sampleSDFWithParticles(sdf, minExtent, maxExtent, nGrid, dx, internalBands, 
     sampledPointsInternal = np.concatenate(sampledPointsInternal, axis = 0)
     sampledPoints = np.vstack((sampledPointsInternal, sampledPointsExternal))
     return sampledPoints, f, points, sampledPointsInternal, sampledPointsExternal
+
+
+def emitParticlesRegular(dx, minExtent, maxExtent, config: dict):
+    p, volume = sampleRegular(dx, config['domain']['dim'], minExtent.cpu().numpy(), maxExtent.cpu().numpy(), config['kernel']['targetNeighbors'], config['simulation']['correctArea'], config['kernel']['function'])
+
+    areas = p.new_ones(p.shape[0]) * volume
+    supports = p.new_ones(p.shape[0]) * volumeToSupport(volume, config['kernel']['targetNeighbors'], config['domain']['dim'])
+    velocities = p.new_zeros(p.shape[0], config['domain']['dim'])
+    
+    return p, areas, supports, velocities
+
+def emitParticlesSDF(sdf, dx, minExtent, maxExtent, config: dict, sdfThreshold = 0.0):
+    p, volume = sampleRegular(dx, config['domain']['dim'], minExtent.cpu().numpy(), maxExtent.cpu().numpy(), config['kernel']['targetNeighbors'], config['simulation']['correctArea'], config['kernel']['function'])
+    h = volumeToSupport(volume, config['kernel']['targetNeighbors'], config['domain']['dim'])
+
+    particles, maskB, *_ = filterParticlesWithSDF(p, sdf, h, sdfThreshold)
+
+    areas = particles.new_ones(particles.shape[0]) * volume
+    supports = particles.new_ones(particles.shape[0]) * h
+    velocities = particles.new_zeros(particles.shape[0], config['domain']['dim'])
+
+    return particles, areas, supports, velocities

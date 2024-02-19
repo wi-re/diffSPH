@@ -10,6 +10,9 @@ class Parameter():
         self.hint = hint
         self.export = export
         
+    def __repr__(self):
+        return 'Parameter [%s.%s], required? %s, exported? %s, description: %s' % (self.namespace, self.name, 'yes' if self.required else 'no', 'yes' if self.export else 'no', self.hint)
+
     def parseConfig(self, config):
         if self.required and self.namespace not in config:
             raise Exception('Parameter Namespace %s missing for required parameter %s.%s' % (self.namespace, self.namespace, self.name))
