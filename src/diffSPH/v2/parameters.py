@@ -17,14 +17,10 @@ fluidParameters = [
 
 simulationParameters = [
     Parameter('simulation', 'correctArea', bool, False, required = False, export = True),
+    Parameter('simulation', 'supportScheme', str, 'symmetric', required = False, export = True),
 ]
 
 integrationParameters = [
-    Parameter('integration', 'dt', float, 0.01, required = False, export = True),
-    Parameter('integration', 'adaptiveTimestep', bool, False, required = False, export = True),
-    Parameter('integration', 'CFL', float, 0.25, required = False, export = True),
-    Parameter('integration', 'maxDt', float, 0.1, required = False, export = True),
-    Parameter('integration', 'minDt', float, 0.001, required = False, export = True),
 ]
 
 computeParameters = [
