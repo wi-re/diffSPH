@@ -10,8 +10,9 @@ particleParameters = [
 ]
 
 fluidParameters = [
-    Parameter('fluid', 'rho0', float, 1, required = False, export = True),
-    Parameter('fluid', 'mu', float, 0.01, required = False, export = True),
+    Parameter('fluid', 'rho0', float, 2000, required = False, export = True),
+    Parameter('fluid', 'mu', float, 0.1, required = False, export = True),
+    Parameter('fluid', 'cs', float, 10, required = False, export = True),
 ]
 
 simulationParameters = [

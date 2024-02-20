@@ -237,7 +237,7 @@ def sphOperationFluidState(fluidState, quantities : tuple[torch.Tensor, torch.Te
             fluidState['numParticles'])
     return sphOperation(
         (fluidState['fluidMasses'], fluidState['fluidMasses']), 
-        (fluidState['fluidDensities'], fluidState['fluidDensities']) if 'fluidDensities' in fluidState else (None, None),
+        (fluidState['fluidDensities'], fluidState['fluidDensities']),
         quantities, 
         fluidState['fluidNeighborhood']['indices'], 
         fluidState['fluidNeighborhood']['kernels'], fluidState['fluidNeighborhood']['gradients'], 

@@ -188,7 +188,7 @@ class deltaSPHSimulation(SPHSimulation):
         step = ' 9 - density diffusion'
         if self.verbose: print(step)
         with record_function(step):     
-            self.densityDiffusionModule.computeDensityDiffusion(self.simulationState, self)            
+            self.densityDiffusionModule.computeDensityDiffusion(self.simulationState, self)             
         step = '10 - pressure evaluation'
         if self.verbose: print(step)
         with record_function(step):     

@@ -95,6 +95,29 @@ def detectFreeSurfaceBarecasco(simulationState, simConfig):
     fs = ~scatter_sum(condition, i, dim = 0, dim_size = numParticles)
     return fs
 
+from torch_scatter import scatter
+def computeSurfaceDistance(simulationState, simConfig):
+    surfaceDistance = simulationState['freeSurface'].new_zeros(simulationState['numParticles'], dtype = simConfig['compute']['dtype'])
+    surfaceDistance[:] = 1e4
+    surfaceDistance[simulationState['freeSurface']] = simConfig['particle']['dx']
+
+    (i,j) = simulationState['fluidNeighborhood']['indices']
+
+    for step in range(simConfig['surfaceDetection']['distanceIterations']):
+        distance = surfaceDistance[j] + simulationState['fluidNeighborhood']['distances'] * simulationState['fluidNeighborhood']['supports']
+        newDistance = scatter(distance, i, dim = 0, reduce = 'min', dim_size = simulationState['numParticles'])
+        update = torch.mean((newDistance - surfaceDistance)**2)
+        print(update)
+        if torch.all(torch.abs(newDistance - surfaceDistance) < simConfig['particle']['defaultSupport'] / 4):
+            break
+        surfaceDistance = newDistance
+
+    return surfaceDistance
+
+def getStableSurfaceNormal(simulationState, simConfig):
+    return sphOperationFluidState(simulationState, (simulationState['surfaceDistance'], simulationState['surfaceDistance']), operation = 'gradient', gradientMode = 'symmetric')
+    
+
 from diffSPH.parameter import Parameter
 def getModuleFunctions():
     return {
@@ -113,4 +136,5 @@ def getParameters():
         Parameter('surfaceDetection', 'colorFieldGradientThreshold', float, 10.0, required = False,export = False, hint = 'Threshold for the color field gradient to detect free surface'),
         Parameter('surfaceDetection', 'colorFieldThreshold', float, 0.8, required = False,export = False, hint = 'Threshold for the free surface detection using mean neighborhood sizes'),
         Parameter('surfaceDetection', 'BarecascoThreshold', float, np.pi / 3, required = False, export = False, hint = 'Threshold for the free surface detection using Barecasco et al. method'),
+        Parameter('surfaceDetection', 'distanceIterations', int, 16, required = False, export = False, hint = 'Number of iterations to compute the surface distance')
     ]
