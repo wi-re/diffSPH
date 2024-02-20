@@ -76,6 +76,7 @@ def scatterPlot(fig, axis, p, c, domainMin, domainMax, label = None, periodic = 
     axis.set_aspect('equal')
     axis.set_xlim(-1.05,1.05)
     axis.set_ylim(-1.05,1.05)
+    return sc, cb
 
 def scatterPlotSymmetric(fig, axis, p, c, domainMin, domainMax, label = None, periodic = True, cmap = 'coolwarm'):
     s = 5000 / p.shape[0]
@@ -94,6 +95,7 @@ def scatterPlotSymmetric(fig, axis, p, c, domainMin, domainMax, label = None, pe
     axis.set_aspect('equal')
     axis.set_xlim(-1.05,1.05)
     axis.set_ylim(-1.05,1.05)
+    return sc, cb
 
 
 def scatterPlotFluid(fig, axis, state, config, q, label = None, cmap = 'viridis'):
@@ -117,6 +119,7 @@ def scatterPlotFluid(fig, axis, state, config, q, label = None, cmap = 'viridis'
     axis.set_aspect('equal')
     axis.set_xlim(-1.05,1.05)
     axis.set_ylim(-1.05,1.05)
+    return sc, cb
 
 def scatterPlotFluidSymmetric(fig, axis, state, config, q, label = None, cmap = 'viridis'):
     x = state['fluidPositions'].detach().cpu()
@@ -139,6 +142,7 @@ def scatterPlotFluidSymmetric(fig, axis, state, config, q, label = None, cmap = 
     axis.set_aspect('equal')
     axis.set_xlim(-1.05,1.05)
     axis.set_ylim(-1.05,1.05)
+    return sc, cb
 
     # sc = axis.scatter(state['fluidPositions'][:,0], state['fluidPositions'][:,1], s = 8, c = q)
     # ax1_divider = make_axes_locatable(axis)
