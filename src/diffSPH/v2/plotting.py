@@ -164,3 +164,223 @@ def plotImplicitSDF(sdf, ngrid = 255, minExtent = -1, maxExtent = 1):
     points = P.reshape(-1,2)
 
     plotSDF(sdf(torch.clone(points),), X, Y, 2, 2)
+
+
+
+def setPlotBaseAttributes(axis, config):
+    domainMin = config['domain']['minExtent']
+    domainMax = config['domain']['maxExtent']
+    axis.set_xlim(config['domain']['minExtent'][0], config['domain']['maxExtent'][0])
+    axis.set_ylim(config['domain']['minExtent'][1], config['domain']['maxExtent'][1])
+    square = patches.Rectangle((domainMin[0], domainMin[1]), domainMax[0] - domainMin[0], domainMax[1] - domainMin[1], linewidth=1, edgecolor='b', facecolor='none',ls='--')
+    axis.add_patch(square)
+    axis.set_aspect('equal')
+    axis.set_xlabel('x')
+    axis.set_ylabel('y')
+    # axis.set_xticklabels([])
+    # axis.set_yticklabels([])
+
+import matplotlib
+from diffSPH.v2.sphOps import sphOperation
+def mapToGrid(visualizationState, quantity):
+    return sphOperation(
+        (None, visualizationState['fluidMasses']), 
+        (None, visualizationState['fluidDensities']), 
+        (None, quantity), 
+        (visualizationState['gridNeighborhood']['indices'][0], visualizationState['gridNeighborhood']['indices'][1]), visualizationState['gridNeighborhood']['kernels'], visualizationState['gridNeighborhood']['gradients'], 
+        visualizationState['gridNeighborhood']['distances'], visualizationState['gridNeighborhood']['vectors'],
+        visualizationState['gridNeighborhood']['supports'],   
+        visualizationState['grid'].shape[0], operation = 'interpolate')
+
+from diffSPH.v2.modules.neighborhood import neighborSearch, fluidNeighborSearch
+from diffSPH.kernels import getKernel
+from diffSPH.v2.sphOps import sphOperationFluidState, sphOperation
+
+
+def prepVisualizationState(perennialState, config, nGrid = 128):
+    visualizationState = {}
+
+    visualizationState['fluidNeighborhood'] = fluidNeighborSearch(perennialState, config)
+    visualizationState['fluidDensities'] = sphOperationFluidState(perennialState, None, 'density')
+    visualizationState['fluidMasses'] = perennialState['fluidMasses']
+
+    visualizationState['fluidVelocities'] = perennialState['fluidVelocities']
+    x = perennialState['fluidPositions']
+
+    periodicity = config['domain']['periodicity']
+    minD = config['domain']['minExtent']
+    maxD = config['domain']['maxExtent']
+
+    if periodicity[0] and not periodicity[1]:
+        visualizationState['fluidPositions'] = torch.stack((torch.remainder(x[:,0] - minD[0], maxD[0] - minD[0]) + minD[0], x[:,1]), dim = 1)
+    elif not periodicity[0] and periodicity[1]:
+        visualizationState['fluidPositions'] = torch.stack((x[:,0], torch.remainder(x[:,1] - minD[1], maxD[1] - minD[1]) + minD[1]), dim = 1)
+    elif periodicity[0] and periodicity[1]:
+        visualizationState['fluidPositions'] = torch.remainder(x - minD, maxD - minD) + minD
+    else:
+        visualizationState['fluidPositions'] = x  
+
+    nGrid = 128
+    xGrid = torch.linspace(config['domain']['minExtent'][0], config['domain']['maxExtent'][0], nGrid)
+    yGrid = torch.linspace(config['domain']['minExtent'][1], config['domain']['maxExtent'][1], nGrid)
+    X, Y = torch.meshgrid(xGrid, yGrid, indexing = 'xy')
+    P = torch.stack([X,Y], dim=-1).flatten(0,1)
+
+    visualizationState['grid'] = P
+    visualizationState['X'] = X
+    visualizationState['Y'] = Y
+    visualizationState['nGrid'] = nGrid
+    i, j, rij, xij, hij, Wij, gradWij = neighborSearch(visualizationState['grid'], visualizationState['fluidPositions'], 0, perennialState['fluidSupports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
+    visualizationState['gridNeighborhood'] = {}
+    visualizationState['gridNeighborhood']['indices'] = (i, j)
+    visualizationState['gridNeighborhood']['distances'] = rij
+    visualizationState['gridNeighborhood']['vectors'] = xij
+    visualizationState['gridNeighborhood']['kernels'] = Wij
+    visualizationState['gridNeighborhood']['gradients'] = gradWij
+    visualizationState['gridNeighborhood']['supports'] = hij
+
+    return visualizationState
+
+def visualizeParticles(fig, axis, config, visualizationState, inputQuantity, mapping = '.x', cbar = True, cmap = 'viridis', scaling = 'symlog', s = 4, linthresh = 0.5, midPoint = 0, gridVisualization = False):        
+    # print(inputQuantity.shape)
+    setPlotBaseAttributes(axis, config)
+    if len(inputQuantity.shape) == 2:
+        # Non scalar quantity
+        if mapping == '.x' or mapping == '[0]':
+            quantity = inputQuantity[:,0]
+        if mapping == '.y' or mapping == '[1]':
+            quantity = inputQuantity[:,1]
+        if mapping == '.z' or mapping == '[2]':
+            quantity = inputQuantity[:,2]
+        if mapping == '.w' or mapping == '[3]':
+            quantity = inputQuantity[:,3]
+        if mapping == 'Linf':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = float('inf'))
+        if mapping == 'L-inf':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = -float('inf'))
+        if mapping == 'L0':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = 0)
+        if mapping == 'L1':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = 1)
+        if mapping == 'L2' or mapping == 'norm' or mapping == 'magnitude':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = 2)
+        if mapping == 'theta':
+            quantity = torch.atan2(inputQuantity[:,1], inputQuantity[:,0])
+    else:
+        quantity = inputQuantity
+
+    pos_x = visualizationState['fluidPositions']
+
+    minScale = torch.min(quantity)
+    maxScale = torch.max(quantity)
+    if 'sym' in scaling:
+        minScale = - torch.max(torch.abs(quantity))
+        maxScale =   torch.max(torch.abs(quantity))
+        if 'log'in scaling:
+            norm = matplotlib.colors.SymLogNorm(vmin = minScale, vmax = maxScale, linthresh = linthresh)
+        else:
+            minScale = - torch.max(torch.abs(quantity - midPoint))
+            maxScale =   torch.max(torch.abs(quantity - midPoint))
+            norm = matplotlib.colors.CenteredNorm(vcenter = midPoint, halfrange = maxScale)
+    else:
+        if 'log'in scaling:
+            vmm = torch.min(torch.abs(quantity[quantity!= 0]))
+            norm = matplotlib.colors.LogNorm(vmin = vmm, vmax = maxScale)
+        else:
+            norm = matplotlib.colors.Normalize(vmin = minScale, vmax = maxScale)
+        
+    if not gridVisualization:
+        sc = axis.scatter(pos_x[:,0].detach().cpu().numpy(), pos_x[:,1].detach().cpu().numpy(), s = s, c = quantity.detach().cpu().numpy(), cmap = cmap, norm = norm)
+    else:
+        gridDensity = mapToGrid(visualizationState, quantity)
+        X = visualizationState['X']
+        Y = visualizationState['Y']
+        sc = axis.pcolormesh(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), gridDensity.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), cmap = cmap, norm = norm)
+        
+    if cbar:
+        ax1_divider = make_axes_locatable(axis)
+        cax1 = ax1_divider.append_axes("right", size="4%", pad="1%")
+        cb = fig.colorbar(sc, cax=cax1,orientation='vertical')
+        cb.ax.tick_params(labelsize=8)
+    # if periodicX:
+    #     axis.axis('equal')
+    #     axis.set_xlim(minDomain[0], maxDomain[0])
+    #     axis.set_ylim(minDomain[1], maxDomain[1])
+    # else:
+    #     axis.set_aspect('equal', 'box')
+
+    return {'plot': sc, 'cbar': cb if cbar else None, 'mapping': mapping, 'colormap': cmap, 'scale': scaling, 'size':4, 'mapToGrid': gridVisualization, 'midPoint' : midPoint, 'linthresh': linthresh}
+    
+
+
+def updatePlot(plotState, visualizationState, inputQuantity):        
+    # print(inputQuantity.shape)
+    # setPlotBaseAttributes(axis, config)
+    mapping = plotState['mapping']
+    scaling = plotState['scale']
+    midPoint = plotState['midPoint']
+    linthresh = plotState['linthresh']
+    s = plotState['size']
+    gridVisualization = plotState['mapToGrid']
+
+    if len(inputQuantity.shape) == 2:
+        # Non scalar quantity
+        if mapping == '.x' or mapping == '[0]':
+            quantity = inputQuantity[:,0]
+        if mapping == '.y' or mapping == '[1]':
+            quantity = inputQuantity[:,1]
+        if mapping == '.z' or mapping == '[2]':
+            quantity = inputQuantity[:,2]
+        if mapping == '.w' or mapping == '[3]':
+            quantity = inputQuantity[:,3]
+        if mapping == 'Linf':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = float('inf'))
+        if mapping == 'L-inf':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = -float('inf'))
+        if mapping == 'L0':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = 0)
+        if mapping == 'L1':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = 1)
+        if mapping == 'L2' or mapping == 'norm' or mapping == 'magnitude':
+            quantity = torch.linalg.norm(inputQuantity, dim = -1, ord = 2)
+        if mapping == 'theta':
+            quantity = torch.atan2(inputQuantity[:,1], inputQuantity[:,0])
+    else:
+        quantity = inputQuantity
+
+    pos_x = visualizationState['fluidPositions']
+
+    minScale = torch.min(quantity)
+    maxScale = torch.max(quantity)
+    if 'sym' in scaling:
+        minScale = - torch.max(torch.abs(quantity))
+        maxScale =   torch.max(torch.abs(quantity))
+        if 'log'in scaling:
+            norm = matplotlib.colors.SymLogNorm(vmin = minScale, vmax = maxScale, linthresh = linthresh)
+        else:
+            minScale = - torch.max(torch.abs(quantity - midPoint))
+            maxScale =   torch.max(torch.abs(quantity - midPoint))
+            norm = matplotlib.colors.CenteredNorm(vcenter = midPoint, halfrange = maxScale)
+    else:
+        if 'log'in scaling:
+            vmm = torch.min(torch.abs(quantity[quantity!= 0]))
+            norm = matplotlib.colors.LogNorm(vmin = vmm, vmax = maxScale)
+        else:
+            norm = matplotlib.colors.Normalize(vmin = minScale, vmax = maxScale)
+        
+    if not gridVisualization:
+        sc = plotState['plot']
+        sc.set_offsets(pos_x.detach().cpu().numpy())
+        sc.set_array(quantity.detach().cpu().numpy())
+        sc.set_norm(norm)
+
+        # scVelocity_x.set_clim(vmin = torch.abs(c).max().item() * -1, vmax = torch.abs(c).max().item())
+        # cbarVelocity_x.update_normal(scVelocity_x)
+        # sc = axis.scatter(pos_x[:,0].detach().cpu().numpy(), pos_x[:,1].detach().cpu().numpy(), s = s, c = quantity.detach().cpu().numpy(), cmap = cmap, norm = norm)
+    else:
+        sc = plotState['plot']
+        gridDensity = mapToGrid(visualizationState, quantity)
+        sc.set_array(gridDensity)
+        sc.set_norm(norm)
+        # sc = axis.pcolormesh(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), gridDensity.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), cmap = cmap, norm = norm)
+    
