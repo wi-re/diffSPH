@@ -1,17 +1,17 @@
 import torch
 from diffSPH.v2.math import scatter_sum
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 @torch.jit.script 
 def sphInterpolation(
         masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
         densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
-        quantities : tuple[torch.Tensor, torch.Tensor],                             # Tuple of particle quantities for (i,j)
+        quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]],                             # Tuple of particle quantities for (i,j)
         neighborhood : tuple[torch.Tensor, torch.Tensor], kernels : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels ij
         numParticles : int):                                                        # Ancillary information
     j = neighborhood[1]
     k = masses[1][j] / densities[1][j] * kernels
-    kq = torch.einsum('n..., n -> n...', quantities[1][j], k)
+    kq = torch.einsum('n..., n -> n...', quantities[1][j] if isinstance(quantities,tuple) else quantities, k)
     
     return scatter_sum(kq, neighborhood[0], dim = 0, dim_size = numParticles)
 
@@ -19,7 +19,7 @@ def sphInterpolation(
 def sphDensityInterpolation(
         masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
         densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
-        quantities : tuple[torch.Tensor, torch.Tensor],                             # Tuple of particle quantities for (i,j)
+        quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]],                             # Tuple of particle quantities for (i,j)
         neighborhood : tuple[torch.Tensor, torch.Tensor], kernels : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels ij
         numParticles : int):                                                        # Ancillary information
     j = neighborhood[1]
@@ -32,12 +32,13 @@ def sphDensityInterpolation(
 def sphGradient(
         masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
         densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
-        quantities : tuple[torch.Tensor, torch.Tensor],                             # Tuple of particle quantities for (i,j)
+        quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]],                             # Tuple of particle quantities for (i,j)
         neighborhood : tuple[torch.Tensor, torch.Tensor], gradKernels : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels ij
         numParticles : int, type : str = 'naive'):    # Ancillary information
     i = neighborhood[0]                                                    
     j = neighborhood[1]
     if type == 'symmetric':
+        assert isinstance(quantities, tuple), 'Symmetric gradient only supports two inputs for quantities!'
         k = masses[1][j].view(-1,1) * gradKernels
         Ai = torch.einsum('n..., n -> n...', quantities[0][i], 1.0 / densities[0][i]**2)
         Aj = torch.einsum('n..., n -> n...', quantities[1][j], 1.0 / densities[1][j]**2)
@@ -46,13 +47,16 @@ def sphGradient(
         return torch.einsum('n, n... -> n...', densities[0], scatter_sum(kq, i, dim = 0, dim_size = numParticles))
     elif type == 'difference':
         k = (masses[1][j] / densities[1][j]).view(-1,1) * gradKernels
-        kq = torch.einsum('n... , nd -> n...d', quantities[1][j] - quantities[0][i], k)
+        qij = (quantities[0][i] - quantities[1][j]) if isinstance(quantities, tuple) else quantities
+        kq = torch.einsum('n... , nd -> n...d', qij, k)
     elif type == 'summation':
         k = (masses[1][j] / densities[1][j]).view(-1,1) * gradKernels
-        kq = torch.einsum('n... , nd -> n...d', quantities[1][j] + quantities[0][i], k)
+        qij = (quantities[0][i] + quantities[1][j]) if isinstance(quantities, tuple) else quantities
+        kq = torch.einsum('n... , nd -> n...d', qij, k)
     else:
         k = (masses[1][j] / densities[1][j]).view(-1,1) * gradKernels
-        kq = torch.einsum('n... , nd -> n...d', quantities[1][j], k)
+        qij = (quantities[1][j]) if isinstance(quantities, tuple) else quantities
+        kq = torch.einsum('n... , nd -> n...d', qij, k)
     
     return scatter_sum(kq, i, dim = 0, dim_size = numParticles)
 
@@ -61,16 +65,17 @@ def sphGradient(
 def sphDivergence(
         masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
         densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
-        quantities : tuple[torch.Tensor, torch.Tensor],                             # Tuple of particle quantities for (i,j)
+        quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]],                             # Tuple of particle quantities for (i,j)
         neighborhood : tuple[torch.Tensor, torch.Tensor], gradKernels : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels ij
         numParticles : int, type : str = 'naive', mode : str = 'div'):    # Ancillary information
     i = neighborhood[0]                                                    
     j = neighborhood[1]
 
-    assert quantities[0].dim() > 1, 'Cannot compute divergence on non vector fields!'
+    assert (isinstance(quantities, tuple) and quantities[0].dim() > 1) or (isinstance(quantities, torch.Tensor) and quantities.dim() > 1), 'Cannot compute divergence on non vector fields!'
     assert (mode in ['div','dot']), 'Only supports div F and nabla dot F'
 
     if type == 'symmetric':
+        assert isinstance(quantities, tuple), 'Symmetric divergence only supports two inputs for quantities!'
         k = masses[1][j].view(-1,1) * gradKernels
         Ai = torch.einsum('n..., n -> n...', quantities[0][i], 1.0 / densities[0][i]**2)
         Aj = torch.einsum('n..., n -> n...', quantities[1][j], 1.0 / densities[1][j]**2)
@@ -83,13 +88,13 @@ def sphDivergence(
 
         return torch.einsum('n, n... -> n...', densities[0], scatter_sum(kq, i, dim = 0, dim_size = numParticles))
         
-    q = quantities[1][j]
+    q = quantities[1][j] if isinstance(quantities, tuple) else quantities
     k = (masses[1][j] / densities[1][j]).view(-1,1) * gradKernels
     
     if type == 'difference':
-        q = quantities[1][j] - quantities[0][i]
+        q = (quantities[1][j] - quantities[0][i]) if isinstance(quantities, tuple) else quantities
     elif type == 'summation':
-        q = quantities[1][j] + quantities[0][i]
+        q = (quantities[1][j] + quantities[0][i]) if isinstance(quantities, tuple) else quantities
         
     if mode == 'div':
         kq = torch.einsum('n...d, nd -> n...', q, k)
@@ -104,16 +109,17 @@ def sphDivergence(
 def sphCurl(
         masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
         densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
-        quantities : tuple[torch.Tensor, torch.Tensor],                             # Tuple of particle quantities for (i,j)
+        quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]],                             # Tuple of particle quantities for (i,j)
         neighborhood : tuple[torch.Tensor, torch.Tensor], gradKernels : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels ij
         numParticles : int, type : str = 'naive'):    # Ancillary information
     i = neighborhood[0]                                                    
     j = neighborhood[1]
 
-    assert quantities[0].dim() > 1, 'Cannot compute curl on non vector fields!'
+    assert (isinstance(quantities, tuple) and quantities[0].dim() > 1), 'Cannot compute curl on non vector fields!'
     assert gradKernels.shape[1] > 1, 'Cannot compute curl on one-dimensional fields!'
 
     if type == 'symmetric':
+        assert isinstance(quantities, tuple), 'Symmetric curl only supports two inputs for quantities!'
         k = masses[1][j].view(-1,1) * gradKernels
         Ai = torch.einsum('n..., n -> n...', quantities[0][i], 1.0 / densities[0][i]**2)
         Aj = torch.einsum('n..., n -> n...', quantities[1][j], 1.0 / densities[1][j]**2)
@@ -126,15 +132,15 @@ def sphCurl(
         
         return torch.einsum('n, n... -> n...', densities[0], scatter_sum(kq, i, dim = 0, dim_size = numParticles))
         
-    q = quantities[1][j]
+    q = (quantities[1][j])
     k = (masses[1][j] / densities[1][j]).view(-1,1) * gradKernels
     
     if type == 'difference':
-        q = quantities[1][j] - quantities[0][i]
+        q = (quantities[1][j] - quantities[0][i]) if isinstance(quantities, tuple) else quantities
     elif type == 'summation':
-        q = quantities[1][j] + quantities[0][i]
+        q = (quantities[1][j] + quantities[0][i]) if isinstance(quantities, tuple) else quantities
         
-    if quantities[1].dim() == 2:
+    if q.dim() == 2:
         kq = q[:,1] * k[:,0] - q[:,0] * k[:,1]
     else:
         kq = torch.cross(q, k, dim = -1)            
@@ -146,7 +152,7 @@ def sphCurl(
 def sphLaplacian(
         masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
         densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
-        quantities : tuple[torch.Tensor, torch.Tensor],                             # Tuple of particle quantities for (i,j)
+        quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]],                             # Tuple of particle quantities for (i,j)
         neighborhood : tuple[torch.Tensor, torch.Tensor], gradKernels : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels ij
         laplaceKernels : Optional[torch.Tensor],    
         rij: torch.Tensor, xij:  torch.Tensor, hij : torch.Tensor,
@@ -154,15 +160,17 @@ def sphLaplacian(
     i = neighborhood[0]                                                    
     j = neighborhood[1]
 
-    if quantities[0].dim() > 2:
+    if (isinstance(quantities, tuple) and quantities[0].dim() > 2) or (not isinstance(quantities, tuple) and quantities.dim() > 2):
         grad = sphGradient(masses, densities, quantities, neighborhood, gradKernels, numParticles, type = 'difference')
         div = sphDivergence(masses, densities, (grad, grad), neighborhood, gradKernels, numParticles, type = 'difference', mode = 'div')
+        return div
     if type == 'naive':     
         assert laplaceKernels is not None, 'Laplace Kernel Values required for naive sph Laplacian operation'
         if laplaceKernels is not None:   
             print('naive')
             lk = -(masses[1][j] / densities[1][j]) * laplaceKernels
-            kq = torch.einsum('n, n... -> n...', lk, quantities[0][i] - quantities[1][j])
+            qij = (quantities[0][i] - quantities[1][j]) if isinstance(quantities, tuple) else quantities
+            kq = torch.einsum('n, n... -> n...', lk, qij)
             # kq = torch.einsum('n, n... -> n...', lk, quantities[1][j])
         
             return scatter_sum(kq, i, dim = 0, dim_size = numParticles)
@@ -171,8 +179,8 @@ def sphLaplacian(
     kernelApproximation = torch.linalg.norm(gradKernels, dim = -1) /  quotient
     kernelApproximation = torch.einsum('nd, nd -> n', gradKernels, -xij)/  quotient# * rij * hij
     
-    Aij = quantities[0][i] - quantities[1][j]
-    if quantities[1].dim() == 1:
+    Aij = (quantities[0][i] - quantities[1][j]) if isinstance(quantities, tuple) else quantities
+    if Aij.dim() == 1:
         kq = -Aij * (masses[1][j] / densities[1][j]) * 2 * kernelApproximation
         return scatter_sum(kq, i, dim = 0, dim_size = numParticles)
     
@@ -202,7 +210,7 @@ def sphLaplacian(
 def sphOperation(
         masses : tuple[torch.Tensor, torch.Tensor],                                                                 # Tuple of particle masses for (i,j)
         densities : tuple[torch.Tensor, torch.Tensor],                                                              # Tuple of particle densities for (i,j)
-        quantities : tuple[torch.Tensor, torch.Tensor],                                                             # Tuple of particle quantities for (i,j)
+        quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]],                             # Tuple of particle quantities for (i,j)
         neighborhood : tuple[torch.Tensor, torch.Tensor], kernels : torch.Tensor, kernelGradients : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels and kernelGradients ij
         radialDistances : torch.Tensor, directions : torch.Tensor, supports : torch.Tensor,                         # Graph information of |x_j - x_i| / hij, (x_j - x_i) / |x_j - x_i| and hij
         numParticles : int,                                                                                         # Ancillary information
@@ -226,7 +234,7 @@ def sphOperation(
         return div
     
 
-def sphOperationFluidState(fluidState, quantities : tuple[torch.Tensor, torch.Tensor], operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div'):
+def sphOperationFluidState(fluidState, quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]], operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div'):
     if operation == 'density':
         return sphDensityInterpolation(
             (fluidState['fluidMasses'], fluidState['fluidMasses']), 

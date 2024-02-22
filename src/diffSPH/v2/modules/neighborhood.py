@@ -32,7 +32,7 @@ def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic 
                 else:
                     fixedSupport = (hx + hy)/2
                 i, j = radiusSearch(pos_x, pos_y, support = None,
-                                    fixedSupport = fixedSupport, 
+                                    fixedSupport = torch.tensor(fixedSupport, dtype= torch.float32, device=x.device), 
                                     periodicity = periodicity, domainMin = minD, domainMax = maxD, mode = mode, algorithm = algorithm)
             else:
                 i, j = radiusSearch(pos_x, pos_y, 

@@ -187,7 +187,7 @@ def mapToGrid(visualizationState, quantity):
     return sphOperation(
         (None, visualizationState['fluidMasses']), 
         (None, visualizationState['fluidDensities']), 
-        (None, quantity), 
+        (quantity, quantity), 
         (visualizationState['gridNeighborhood']['indices'][0], visualizationState['gridNeighborhood']['indices'][1]), visualizationState['gridNeighborhood']['kernels'], visualizationState['gridNeighborhood']['gradients'], 
         visualizationState['gridNeighborhood']['distances'], visualizationState['gridNeighborhood']['vectors'],
         visualizationState['gridNeighborhood']['supports'],   

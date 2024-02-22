@@ -7,7 +7,9 @@ from torch.profiler import record_function
 def computeNormalizationMatrices(fluidState, simConfig):
     with record_function("Normalization"):
         with record_function("[Normalization] Gradient OP"):
-            normalizationMatrices = -sphOperationFluidState(fluidState, (fluidState['fluidPositions'], fluidState['fluidPositions']), operation = 'gradient', gradientMode = 'difference')
+            distances = -(fluidState['fluidNeighborhood']['distances'] * fluidState['fluidNeighborhood']['supports']).view(-1,1) * fluidState['fluidNeighborhood']['vectors']
+            normalizationMatrices = sphOperationFluidState(fluidState, distances, operation = 'gradient', gradientMode = 'difference')
+  
         with record_function("[Normalization] Pinv"):
             L, lambdas = pinv2x2(normalizationMatrices)
 
