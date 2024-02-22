@@ -58,8 +58,8 @@ def plotSDF(fx, X, Y, extent, dim, ngrid = 255):
 
     fig.tight_layout()
 
-def scatterPlot(fig, axis, p, c, domainMin, domainMax, label = None, periodic = True, cmap = 'viridis'):
-    s = 5000 / p.shape[0]
+def scatterPlot(fig, axis, p, c, domainMin, domainMax, label = None, periodic = True, cmap = 'viridis', s = None):
+    s = 5000 / p.shape[0] if s is None else s
     dim = p.shape[1]
     pos_x = torch.stack([p[:,i] if not periodic else torch.remainder(p[:,i] - domainMin[i], domainMax[i] - domainMin[i]) + domainMin[i] for i in range(dim)], dim = 1)
     # pos_y = torch.stack([y[:,i] if not periodic_i else torch.remainder(y[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
@@ -78,8 +78,9 @@ def scatterPlot(fig, axis, p, c, domainMin, domainMax, label = None, periodic = 
     axis.set_ylim(-1.05,1.05)
     return sc, cb
 
-def scatterPlotSymmetric(fig, axis, p, c, domainMin, domainMax, label = None, periodic = True, cmap = 'coolwarm'):
-    s = 5000 / p.shape[0]
+def scatterPlotSymmetric(fig, axis, p, c, domainMin, domainMax, label = None, periodic = True, cmap = 'coolwarm', s = None):
+    s = 5000 / p.shape[0] if s is None else s
+    dim = p.shape[1]
     pos_x = torch.stack([p[:,i] if not periodic else torch.remainder(p[:,i] - domainMin[i], domainMax[i] - domainMin[i]) + domainMin[i] for i in range(dim)], dim = 1)
     # pos_y = torch.stack([y[:,i] if not periodic_i else torch.remainder(y[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
 
@@ -98,9 +99,9 @@ def scatterPlotSymmetric(fig, axis, p, c, domainMin, domainMax, label = None, pe
     return sc, cb
 
 
-def scatterPlotFluid(fig, axis, state, config, q, label = None, cmap = 'viridis'):
+def scatterPlotFluid(fig, axis, state, config, q, label = None, cmap = 'viridis', s = None):
     x = state['fluidPositions'].detach().cpu()
-    s = 5000 / x.shape[0]
+    s = 5000 / x.shape[0] if s is None else s
     dim = x.shape[1]
     domainMin = config['domain']['minExtent']
     domainMax = config['domain']['maxExtent']
@@ -121,9 +122,9 @@ def scatterPlotFluid(fig, axis, state, config, q, label = None, cmap = 'viridis'
     axis.set_ylim(-1.05,1.05)
     return sc, cb
 
-def scatterPlotFluidSymmetric(fig, axis, state, config, q, label = None, cmap = 'viridis'):
+def scatterPlotFluidSymmetric(fig, axis, state, config, q, label = None, cmap = 'viridis', s = None):
     x = state['fluidPositions'].detach().cpu()
-    s = 5000 / x.shape[0]
+    s = 5000 / x.shape[0] if s is None else s
     dim = x.shape[1]
     domainMin = config['domain']['minExtent']
     domainMax = config['domain']['maxExtent']

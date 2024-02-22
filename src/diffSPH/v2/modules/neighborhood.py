@@ -4,20 +4,20 @@ from diffSPH.v2.math import mod
 from torchCompactRadius import radiusSearch
 
 
-def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic : Optional[List[bool]] = None, minDomain = None, maxDomain = None, mode : str = 'gather', algorithm : str = 'compact'):
+def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic : Optional[torch.Tensor] = None, minDomain : Optional[torch.Tensor] = None, maxDomain : Optional[torch.Tensor] = None, mode : str = 'gather', algorithm : str = 'compact'):
     with record_function("NeighborSearch"):
         with record_function("NeighborSearch [adjust Domain]"):
-            periodicity = [False] * x.shape[1] if periodic is None else (periodic if isinstance(periodic, list) else [periodic] * x.shape[1])
+            periodicity = torch.tensor([False] * x.shape[1], dtype = torch.bool).to(x.device)
             if isinstance(periodic, torch.Tensor):
-                periodicity = periodic.detach().cpu().numpy().tolist()
-            if minDomain is not None and isinstance(minDomain, list):
-                minD = torch.tensor(minDomain).to(x.device).type(x.dtype)
-            else:
-                minD = minDomain
-            if maxDomain is not None and isinstance(minDomain, list):
-                maxD = torch.tensor(maxDomain).to(x.device).type(x.dtype)
-            else:
-                maxD = maxDomain
+                periodicity = periodic
+            # if minDomain is not None and isinstance(minDomain, list):
+                # minD = torch.tensor(minDomain).to(x.device).type(x.dtype)
+            # else:
+            minD = minDomain
+            # if maxDomain is not None and isinstance(minDomain, list):
+                # maxD = torch.tensor(maxDomain).to(x.device).type(x.dtype)
+            # else:
+            maxD = maxDomain
         with record_function("NeighborSearch [periodicity]"):
             pos_x = torch.stack([x[:,i] if not periodic_i else torch.remainder(x[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
             pos_y = torch.stack([y[:,i] if not periodic_i else torch.remainder(y[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
@@ -31,12 +31,12 @@ def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic 
                     fixedSupport = hy
                 else:
                     fixedSupport = (hx + hy)/2
-                i, j = radiusSearch(pos_x, pos_y, 
-                                    fixedSupport, 
+                i, j = radiusSearch(pos_x, pos_y, support = None,
+                                    fixedSupport = fixedSupport, 
                                     periodicity = periodicity, domainMin = minD, domainMax = maxD, mode = mode, algorithm = algorithm)
             else:
                 i, j = radiusSearch(pos_x, pos_y, 
-                                (hx if isinstance(hx, torch.Tensor) else torch.ones(x.shape[0]).to(x.device).to(x.dtype) * hx, hy if isinstance(hy, torch.Tensor) else torch.ones(y.shape[0]).to(y.device).to(y.dtype) * hy), 
+                                support = (hx if isinstance(hx, torch.Tensor) else torch.ones(x.shape[0]).to(x.device).to(x.dtype) * hx, hy if isinstance(hy, torch.Tensor) else torch.ones(y.shape[0]).to(y.device).to(y.dtype) * hy), fixedSupport = None,
                                 periodicity = periodicity, domainMin = minD, domainMax = maxD, mode = mode, algorithm = algorithm)
         
         with record_function("NeighborSearch [compute Support]"):

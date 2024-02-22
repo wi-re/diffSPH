@@ -106,10 +106,10 @@ def filterParticlesWithSDF(p, sdf, h, threshold = 0.0):
     sdfValues = sdf(p)
     mask = sdfValues <= threshold
     masked = p[mask]
-    sdfGradient = continuousGradient(sdf, masked, stencil, 0.2 * h, 1)
+    sdfGradient = continuousGradient(sdf, p, stencil, 0.2 * h, 1)
     sdfGradient = torch.nn.functional.normalize(sdfGradient, dim = -1)
     
-    return masked, mask, sdfValues[mask], sdfGradient
+    return masked, mask, sdfValues, sdfGradient
 import numpy as np
 
 def polygonToSDF(polygon, minDomain = [-1, -1], maxDomain = [1,1], sdfResolution = 128):
