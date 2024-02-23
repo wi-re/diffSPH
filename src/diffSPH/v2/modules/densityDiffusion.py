@@ -25,7 +25,7 @@ def renormalizedDensityGradient(simulationState, config):
 
 def computeDensityDeltaTerm(fluidState, config):
     (i, j) = fluidState['fluidNeighborhood']['indices']
-    scheme = config['densityDiffusion']['scheme']
+    scheme = config['diffusion']['densityScheme']
 
     rij = fluidState['fluidNeighborhood']['distances'] * fluidState['fluidNeighborhood']['supports']
     if scheme == 'deltaSPH':
@@ -40,7 +40,7 @@ def computeDensityDeltaTerm(fluidState, config):
         rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidSupports'])
         psi_ij = -rho_ij.view(-1,1) * fluidState['fluidNeighborhood']['vectors']
 
-    return config['densityDiffusion']['delta'] * fluidState['fluidSupports'] * config['fluid']['cs'] * sphOperationFluidState(fluidState, psi_ij, operation = 'divergence', gradientMode='difference')
+    return config['diffusion']['delta'] * fluidState['fluidSupports'] * config['fluid']['cs'] * sphOperationFluidState(fluidState, psi_ij, operation = 'divergence', gradientMode='difference')
 
 
 
@@ -49,6 +49,6 @@ def computeDensityDeltaTerm(fluidState, config):
 from diffSPH.parameter import Parameter
 def getParameters():
     return [
-        Parameter('densityDiffusion', 'delta', float, 0.1, required = False,export = False, hint = 'Delta value for the density diffusion term'),
-        Parameter('densityDiffusion', 'scheme', str, 'deltaSPH', required = False,export = False, hint = 'Scheme for the density diffusion term') 
+        Parameter('diffusion', 'delta', float, 0.1, required = False,export = False, hint = 'Delta value for the density diffusion term'),
+        Parameter('diffusion', 'densityScheme', str, 'deltaSPH', required = False,export = False, hint = 'Scheme for the density diffusion term') 
     ]

@@ -103,6 +103,7 @@ from scipy.ndimage import distance_transform_edt
 from diffSPH.v2.finiteDifference import centralDifferenceStencil, continuousGradient
 def filterParticlesWithSDF(p, sdf, h, threshold = 0.0):
     stencil = centralDifferenceStencil(1, 2)
+    stencil = stencil.to(p.device)
     sdfValues = sdf(p)
     mask = sdfValues <= threshold
     masked = p[mask]

@@ -71,7 +71,7 @@ def scatterPlot(fig, axis, p, c, domainMin, domainMax, label = None, periodic = 
     if label is not None:
         axis.set_title(label)
     if p.shape[1] > 1:
-        square = patches.Rectangle((domainMin[0], domainMin[1]), domainMax[0] - domainMin[0], domainMax[1] - domainMin[1], linewidth=1, edgecolor='b', facecolor='none',ls='--')
+        square = patches.Rectangle((domainMin[0].detach().cpu().numpy(), domainMin[1].detach().cpu().numpy()), domainMax[0].detach().cpu().numpy() - domainMin[0].detach().cpu().numpy(), domainMax[1].detach().cpu().numpy() - domainMin[1].detach().cpu().numpy(), linewidth=1, edgecolor='b', facecolor='none',ls='--')
         axis.add_patch(square)
     axis.set_aspect('equal')
     axis.set_xlim(-1.05,1.05)
@@ -91,7 +91,7 @@ def scatterPlotSymmetric(fig, axis, p, c, domainMin, domainMax, label = None, pe
     if label is not None:
         axis.set_title(label)
     if p.shape[1] > 1:
-        square = patches.Rectangle((domainMin[0], domainMin[1]), domainMax[0] - domainMin[0], domainMax[1] - domainMin[1], linewidth=1, edgecolor='b', facecolor='none',ls='--')
+        square = patches.Rectangle((domainMin[0].detach().cpu().numpy(), domainMin[1].detach().cpu().numpy()), domainMax[0].detach().cpu().numpy() - domainMin[0].detach().cpu().numpy(), domainMax[1].detach().cpu().numpy() - domainMin[1].detach().cpu().numpy(), linewidth=1, edgecolor='b', facecolor='none',ls='--')
         axis.add_patch(square)
     axis.set_aspect('equal')
     axis.set_xlim(-1.05,1.05)
@@ -115,7 +115,7 @@ def scatterPlotFluid(fig, axis, state, config, q, label = None, cmap = 'viridis'
     if label is not None:
         axis.set_title(label)
     if x.shape[1] > 1:
-        square = patches.Rectangle((domainMin[0], domainMin[1]), domainMax[0] - domainMin[0], domainMax[1] - domainMin[1], linewidth=1, edgecolor='b', facecolor='none',ls='--')
+        square = patches.Rectangle((domainMin[0].detach().cpu().numpy(), domainMin[1].detach().cpu().numpy()), domainMax[0].detach().cpu().numpy() - domainMin[0].detach().cpu().numpy(), domainMax[1].detach().cpu().numpy() - domainMin[1].detach().cpu().numpy(), linewidth=1, edgecolor='b', facecolor='none',ls='--')
         axis.add_patch(square)
     axis.set_aspect('equal')
     axis.set_xlim(-1.05,1.05)
@@ -138,7 +138,7 @@ def scatterPlotFluidSymmetric(fig, axis, state, config, q, label = None, cmap = 
     if label is not None:
         axis.set_title(label)
     if x.shape[1] > 1:
-        square = patches.Rectangle((domainMin[0], domainMin[1]), domainMax[0] - domainMin[0], domainMax[1] - domainMin[1], linewidth=1, edgecolor='b', facecolor='none',ls='--')
+        square = patches.Rectangle((domainMin[0].detach().cpu().numpy(), domainMin[1].detach().cpu().numpy()), domainMax[0].detach().cpu().numpy() - domainMin[0].detach().cpu().numpy(), domainMax[1].detach().cpu().numpy() - domainMin[1].detach().cpu().numpy(), linewidth=1, edgecolor='b', facecolor='none',ls='--')
         axis.add_patch(square)
     axis.set_aspect('equal')
     axis.set_xlim(-1.05,1.05)
@@ -169,10 +169,10 @@ def plotImplicitSDF(sdf, ngrid = 255, minExtent = -1, maxExtent = 1):
 
 
 def setPlotBaseAttributes(axis, config):
-    domainMin = config['domain']['minExtent']
-    domainMax = config['domain']['maxExtent']
-    axis.set_xlim(config['domain']['minExtent'][0], config['domain']['maxExtent'][0])
-    axis.set_ylim(config['domain']['minExtent'][1], config['domain']['maxExtent'][1])
+    domainMin = config['domain']['minExtent'].detach().cpu().numpy()
+    domainMax = config['domain']['maxExtent'].detach().cpu().numpy()
+    axis.set_xlim(domainMin[0], domainMax[0])
+    axis.set_ylim(domainMin[1], domainMax[1])
     square = patches.Rectangle((domainMin[0], domainMin[1]), domainMax[0] - domainMin[0], domainMax[1] - domainMin[1], linewidth=1, edgecolor='b', facecolor='none',ls='--')
     axis.add_patch(square)
     axis.set_aspect('equal')
@@ -222,8 +222,8 @@ def prepVisualizationState(perennialState, config, nGrid = 128):
         visualizationState['fluidPositions'] = x  
 
     nGrid = 128
-    xGrid = torch.linspace(config['domain']['minExtent'][0], config['domain']['maxExtent'][0], nGrid)
-    yGrid = torch.linspace(config['domain']['minExtent'][1], config['domain']['maxExtent'][1], nGrid)
+    xGrid = torch.linspace(config['domain']['minExtent'][0], config['domain']['maxExtent'][0], nGrid, dtype = perennialState['fluidPositions'].dtype, device = perennialState['fluidPositions'].device)
+    yGrid = torch.linspace(config['domain']['minExtent'][1], config['domain']['maxExtent'][1], nGrid, dtype = perennialState['fluidPositions'].dtype, device = perennialState['fluidPositions'].device)
     X, Y = torch.meshgrid(xGrid, yGrid, indexing = 'xy')
     P = torch.stack([X,Y], dim=-1).flatten(0,1)
 
@@ -350,21 +350,21 @@ def updatePlot(plotState, visualizationState, inputQuantity):
         quantity = inputQuantity
 
     pos_x = visualizationState['fluidPositions']
-
-    minScale = torch.min(quantity)
-    maxScale = torch.max(quantity)
+    qcpu = quantity.detach().cpu()
+    minScale = torch.min(qcpu)
+    maxScale = torch.max(qcpu)
     if 'sym' in scaling:
-        minScale = - torch.max(torch.abs(quantity))
-        maxScale =   torch.max(torch.abs(quantity))
+        minScale = - torch.max(torch.abs(qcpu))
+        maxScale =   torch.max(torch.abs(qcpu))
         if 'log'in scaling:
             norm = matplotlib.colors.SymLogNorm(vmin = minScale, vmax = maxScale, linthresh = linthresh)
         else:
-            minScale = - torch.max(torch.abs(quantity - midPoint))
-            maxScale =   torch.max(torch.abs(quantity - midPoint))
+            minScale = - torch.max(torch.abs(qcpu - midPoint))
+            maxScale =   torch.max(torch.abs(qcpu - midPoint))
             norm = matplotlib.colors.CenteredNorm(vcenter = midPoint, halfrange = maxScale)
     else:
         if 'log'in scaling:
-            vmm = torch.min(torch.abs(quantity[quantity!= 0]))
+            vmm = torch.min(torch.abs(qcpu[qcpu!= 0]))
             norm = matplotlib.colors.LogNorm(vmin = vmm, vmax = maxScale)
         else:
             norm = matplotlib.colors.Normalize(vmin = minScale, vmax = maxScale)
@@ -372,7 +372,7 @@ def updatePlot(plotState, visualizationState, inputQuantity):
     if not gridVisualization:
         sc = plotState['plot']
         sc.set_offsets(pos_x.detach().cpu().numpy())
-        sc.set_array(quantity.detach().cpu().numpy())
+        sc.set_array(qcpu.numpy())
         sc.set_norm(norm)
 
         # scVelocity_x.set_clim(vmin = torch.abs(c).max().item() * -1, vmax = torch.abs(c).max().item())
@@ -381,7 +381,7 @@ def updatePlot(plotState, visualizationState, inputQuantity):
     else:
         sc = plotState['plot']
         gridDensity = mapToGrid(visualizationState, quantity)
-        sc.set_array(gridDensity)
+        sc.set_array(gridDensity.detach().cpu().numpy())
         sc.set_norm(norm)
         # sc = axis.pcolormesh(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), gridDensity.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), cmap = cmap, norm = norm)
     
