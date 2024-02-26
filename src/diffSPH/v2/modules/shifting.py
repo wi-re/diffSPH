@@ -11,7 +11,7 @@ def evalKernel(rij, xij, hij, k, dim):
     return K, J, H
 
 @torch.jit.script
-def LinearCG(H, B, x0, i, j, tol : float =1e-5):    
+def LinearCG(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):    
     xk = x0
     rk = torch.zeros_like(x0)
     numParticles = rk.shape[0] // 2
@@ -28,7 +28,8 @@ def LinearCG(H, B, x0, i, j, tol : float =1e-5):
     rk_norm = torch.linalg.norm(rk)
     
     num_iter = 0
-    while rk_norm > tol and num_iter < 32:
+    rk_norm = torch.linalg.norm(rk)
+    while (torch.abs(torch.linalg.norm(rk) / rk_norm - 1) > 1e-4 or num_iter == 0) and num_iter < maxIter and torch.linalg.norm(rk) > tol:
         apk = torch.zeros_like(x0)
 
         apk[::2]  += scatter_sum(H[:,0,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
@@ -47,11 +48,12 @@ def LinearCG(H, B, x0, i, j, tol : float =1e-5):
         
         num_iter += 1
 
-        rk_norm = torch.linalg.norm(rk)
+        # rk_norm = torch.linalg.norm(rk)
+        # print(f'Iter: {num_iter}, Residual: {torch.linalg.norm(rk)}, Threshold {tol}, Ratio {torch.linalg.norm(rk) / rk_norm - 1}')
     return xk
 
 @torch.jit.script
-def BiCGStab(H, B, x0, i, j, tol : float =1e-5):
+def BiCGStab(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
     xk = x0
     rk = torch.zeros_like(x0)
     numParticles = rk.shape[0] // 2
@@ -67,7 +69,11 @@ def BiCGStab(H, B, x0, i, j, tol : float =1e-5):
     pk = rk.clone()
     
     num_iter = 0
-    while torch.linalg.norm(rk) > tol and num_iter < 32:
+
+    rk_norm = torch.linalg.norm(rk)
+    while (torch.abs(torch.linalg.norm(rk) / rk_norm - 1) > 1e-4 or num_iter == 0) and num_iter < maxIter and torch.linalg.norm(rk) > tol:
+    # while num_iter < maxIter and torch.linalg.norm(rk) > tol:
+        rk_norm = torch.linalg.norm(rk)
         apk = torch.zeros_like(x0)
 
         apk[::2]  += scatter_sum(H[:,0,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
@@ -94,6 +100,8 @@ def BiCGStab(H, B, x0, i, j, tol : float =1e-5):
         pk = rk + beta * (pk - omega * apk)
         
         num_iter += 1
+        # rk_norm = torch.linalg.norm(rk)
+        # print(f'Iter: {num_iter}, Residual: {torch.linalg.norm(rk)}, Threshold {tol}, Ratio {torch.linalg.norm(rk) / rk_norm - 1}')
 
     return xk
 
@@ -155,7 +163,7 @@ def computeShifting(particleState, config, computeRho = False, BiCG = True):
             fs = particleState['fluidFreeSurface']
         fsm = particleState['fluidFreeSurfaceMask']
 
-    particleState['fluidNeighborhood'] = fluidNeighborSearch(particleState, config)
+    # particleState['fluidNeighborhood'] = fluidNeighborSearch(particleState, config)
     (i,j) = particleState['fluidNeighborhood']['indices']
     rij = particleState['fluidNeighborhood']['distances']
     xij = particleState['fluidNeighborhood']['vectors']
@@ -176,11 +184,15 @@ def computeShifting(particleState, config, computeRho = False, BiCG = True):
 
     h2 = particleState['fluidSupports'].repeat(2,1).T.flatten()
     x0 = torch.rand(numParticles * 2).to(rij.device).type(rij.dtype) * h2 / 4 - h2 / 8
+    if config['shifting']['initialization'] == 'deltaPlus':
+        x0 = -deltaPlusShifting(particleState, config).flatten() * 0.5
+    if config['shifting']['initialization'] == 'deltaMinus':
+        x0 = deltaPlusShifting(particleState, config).flatten() * 0.5
 
-    B = torch.zeros(numParticles * 2, dtype = torch.float32)
+    B = torch.zeros(numParticles * 2, dtype = torch.float32, device=rij.device)
     if config['shifting']['freeSurface']:
 
-        J2 = torch.zeros(J.shape[0], 2, dtype = torch.float32)
+        J2 = torch.zeros(J.shape[0], 2, dtype = torch.float32, device=rij.device)
         J2[fs < 0.5, :] = J[fs < 0.5, :]
 
         B[::2] = J2[:,0]
@@ -194,16 +206,16 @@ def computeShifting(particleState, config, computeRho = False, BiCG = True):
         iMasked = i[fs[i] < 0.5]
         jMasked = j[fs[i] < 0.5]
         if BiCG:
-            xk = BiCGStab(H[fs[i] < 0.5], B, x0, iMasked, jMasked)
+            xk = BiCGStab(H[fs[i] < 0.5], B, x0, iMasked, jMasked, maxIter = config['shifting']['maxSolveIter'])
         else:
-            xk = LinearCG(H[fs[i] < 0.5], B, x0, iMasked, jMasked)
+            xk = LinearCG(H[fs[i] < 0.5], B, x0, iMasked, jMasked, maxIter = config['shifting']['maxSolveIter'])
     else:
         B[::2] = J[:,0]
         B[1::2] = J[:,1]
         if BiCG:
-            xk = BiCGStab(H, B, x0, i, j)
+            xk = BiCGStab(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
         else:
-            xk = LinearCG(H, B, x0, i, j)
+            xk = LinearCG(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
 
     update =  torch.vstack((-xk[::2],-xk[1::2])).T# , J, H, B
     return update, K, J, H, B
@@ -286,4 +298,6 @@ def getParameters():
         Parameter('shifting', 'maxIterations', int, 32, required = False,export = False, hint = 'Maximum number of iterations for the shifting scheme'),
         Parameter('shifting', 'summationDensity', bool, True, required = False,export = False, hint = 'Use summation density for the shifting scheme'),
         Parameter('shifting', 'useExtendedMask', bool, False, required = False,export = False, hint = 'Use extended mask for the shifting scheme'),
+        Parameter('shifting', 'initialization', str, 'deltaPlus', required = False,export = False, hint = 'Initialization scheme for the shifting scheme (deltaPlus, random)'),
+        Parameter('shifting', 'maxSolveIter', int, 32, required = False,export = False, hint = 'Maximum number of iterations for the linear solver in the shifting scheme'),
     ]

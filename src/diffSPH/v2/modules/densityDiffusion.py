@@ -30,14 +30,14 @@ def computeDensityDeltaTerm(fluidState, config):
     rij = fluidState['fluidNeighborhood']['distances'] * fluidState['fluidNeighborhood']['supports']
     if scheme == 'deltaSPH':
         grad_ij = fluidState['fluidGradRho^L'][i] + fluidState['fluidGradRho^L'][j]
-        rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidSupports'])
+        rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidNeighborhood']['supports'])
         psi_ij = -rho_ij.view(-1,1) * fluidState['fluidNeighborhood']['vectors'] - grad_ij
     elif scheme == 'denormalized':
         grad_ij = fluidState['fluidGradRho'][i] + fluidState['fluidGradRho'][j]
-        rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidSupports'])
+        rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidNeighborhood']['supports'])
         psi_ij = -rho_ij.view(-1,1) * fluidState['fluidNeighborhood']['vectors'] - grad_ij
     elif scheme == 'densityOnly':
-        rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidSupports'])
+        rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidNeighborhood']['supports'])
         psi_ij = -rho_ij.view(-1,1) * fluidState['fluidNeighborhood']['vectors']
 
     return config['diffusion']['delta'] * fluidState['fluidSupports'] * config['fluid']['cs'] * sphOperationFluidState(fluidState, psi_ij, operation = 'divergence', gradientMode='difference')
