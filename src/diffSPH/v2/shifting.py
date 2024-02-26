@@ -1,6 +1,6 @@
 import torch
 from diffSPH.v2.math import scatter_sum
-from diffSPH.v2.neighborhood import neighborSearch
+# from diffSPH.v2.neighborhood import neighborSearch
 from diffSPH.v2.sphOps import sphOperation
 
 def evalKernel(rij, xij, hij, k, dim):
