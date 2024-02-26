@@ -188,6 +188,9 @@ def computeShifting(particleState, config, computeRho = False, BiCG = True):
         x0 = -deltaPlusShifting(particleState, config).flatten() * 0.5
     if config['shifting']['initialization'] == 'deltaMinus':
         x0 = deltaPlusShifting(particleState, config).flatten() * 0.5
+    if config['shifting']['initialization'] == 'zero':
+        x0 = torch.zeros_like(x0)
+    
 
     B = torch.zeros(numParticles * 2, dtype = torch.float32, device=rij.device)
     if config['shifting']['freeSurface']:
