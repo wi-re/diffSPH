@@ -6,17 +6,6 @@ from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrice
 from diffSPH.v2.math import scatter_sum
 
 # See Maronne et al: Fast free-surface detection and level-set function definition in SPH solvers
-def computeNormalsMaronne(fluidState, simConfig):    
-    ones = fluidState['fluidPositions'].new_ones(fluidState['fluidPositions'].shape[0])
-    term = sphOperationFluidState(fluidState, (ones, ones), operation = 'gradient', gradientMode='naive')
-    L, lambdas = (fluidState['fluidL'], fluidState['L.EVs']) if 'fluidL' in fluidState else computeNormalizationMatrices(fluidState, simConfig)
-
-    nu = torch.bmm(L, term.unsqueeze(-1)).squeeze(-1)
-    n = torch.nn.functional.normalize(nu, dim = -1)
-    lMin = torch.min(torch.abs(lambdas), dim = -1).values
-
-    return n, lMin
-
 def detectFreeSurfaceMaronne(fluidState, simConfig):
     particles = fluidState['fluidPositions']
     n = fluidState['fluidNormals'] if 'fluidNormals' in fluidState else computeNormalsMaronne(fluidState, simConfig)[0]
@@ -49,7 +38,18 @@ def detectFreeSurfaceMaronne(fluidState, simConfig):
     
     fs = torch.where(~cA & ~cB, 1.,0.)
     return fs, cA, cB
-# end of Maronne et al
+
+# See Maronne et al: Fast free-surface detection and level-set function definition in SPH solvers
+def computeNormalsMaronne(fluidState, simConfig):    
+    ones = fluidState['fluidPositions'].new_ones(fluidState['fluidPositions'].shape[0])
+    term = sphOperationFluidState(fluidState, (ones, ones), operation = 'gradient', gradientMode='naive')
+    L, lambdas = (fluidState['fluidL'], fluidState['L.EVs']) if 'fluidL' in fluidState else computeNormalizationMatrices(fluidState, simConfig)
+
+    nu = torch.bmm(L, term.unsqueeze(-1)).squeeze(-1)
+    n = -torch.nn.functional.normalize(nu, dim = -1)
+    lMin = torch.min(torch.abs(lambdas), dim = -1).values
+
+    return n, lMin
 
 def expandFreeSurfaceMask(fluidState, simConfig):
     fs = fluidState['fluidFreeSurface']
