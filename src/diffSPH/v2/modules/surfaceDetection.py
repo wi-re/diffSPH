@@ -95,7 +95,7 @@ def detectFreeSurfaceBarecasco(simulationState, simConfig):
     fs = ~scatter_sum(condition, i, dim = 0, dim_size = numParticles)
     return fs
 
-from torch_scatter import scatter
+# from torch_scatter import scatter
 def computeSurfaceDistance(simulationState, simConfig):
     surfaceDistance = simulationState['freeSurface'].new_zeros(simulationState['numParticles'], dtype = simConfig['compute']['dtype'])
     surfaceDistance[:] = 1e4
@@ -105,7 +105,9 @@ def computeSurfaceDistance(simulationState, simConfig):
 
     for step in range(simConfig['surfaceDetection']['distanceIterations']):
         distance = surfaceDistance[j] + simulationState['fluidNeighborhood']['distances'] * simulationState['fluidNeighborhood']['supports']
-        newDistance = scatter(distance, i, dim = 0, reduce = 'min', dim_size = simulationState['numParticles'])
+        newDistance = distance.new_zeros(simulationState['numParticles'], dtype = simConfig['compute']['dtype'])
+        newDistance.index_reduce_(dim = 0, index = i, source = distance, include_self = False, reduce = 'amin')
+        # newDistance = scatter(distance, i, dim = 0, reduce = 'min', dim_size = simulationState['numParticles'])
         update = torch.mean((newDistance - surfaceDistance)**2)
         print(update)
         if torch.all(torch.abs(newDistance - surfaceDistance) < simConfig['particle']['defaultSupport'] / 4):

@@ -299,7 +299,7 @@ def filterPotentialField(sdf, noiseState, fluidConfig, kind = 'divergenceFree'):
     else:
         return rampOrthogonal(noiseState['fluidPositions'], noiseState['fluidPotential'], sdf, offset = fluidConfig['particle']['dx'] / 2, d0 = noiseState['fluidSupports'])
     
-from torchCompactRadius.util import countUniqueEntries
+from diffSPH.v2.util import countUniqueEntries
 from diffSPH.v2.sdf import operatorDict
 
 def sampleNoisyParticles(noiseConfig, config, sdfs = []):

@@ -1,15 +1,26 @@
 from typing import List, Optional
 import torch
 from diffSPH.v2.math import mod
-from torchCompactRadius import radiusSearch
 
 
-def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic : Optional[torch.Tensor] = None, minDomain : Optional[torch.Tensor] = None, maxDomain : Optional[torch.Tensor] = None, mode : str = 'gather', algorithm : str = 'compact'):
+try:
+    from torchCompactRadius import radiusSearch
+    hasClusterRadius = True
+except ModuleNotFoundError:
+    from diffSPH.v2.neighborhoodFallback.neighborhood import radiusSearch
+    hasClusterRadius = False
+    # pass
+
+
+
+def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic : Optional[torch.Tensor] = None, minDomain : Optional[torch.Tensor] = None, maxDomain : Optional[torch.Tensor] = None, mode : str = 'gather', algorithm : str = 'compact' if hasClusterRadius else 'naive'):
     with record_function("NeighborSearch"):
         with record_function("NeighborSearch [adjust Domain]"):
             periodicity = torch.tensor([False] * x.shape[1], dtype = torch.bool).to(x.device)
             if isinstance(periodic, torch.Tensor):
                 periodicity = periodic
+            if isinstance(periodic, bool):
+                periodicity = torch.tensor([periodic] * x.shape[1], dtype = torch.bool).to(x.device)
             # if minDomain is not None and isinstance(minDomain, list):
                 # minD = torch.tensor(minDomain).to(x.device).type(x.dtype)
             # else:

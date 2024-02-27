@@ -11,10 +11,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
-from torch_geometric.nn import radius
-from torch_geometric.nn import SplineConv, fps, global_mean_pool, radius_graph, radius
-from torch_scatter import scatter
-from torch.profiler import profile, record_function, ProfilerActivity
 
 # Wendland 2 Kernel function and its derivative
 @torch.jit.script
