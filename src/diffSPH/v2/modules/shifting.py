@@ -408,7 +408,7 @@ def solveShifting(particleState, config):
             elif config['shifting']['normalScheme'] == 'lambda':
                 if 'fluidL' not in particleState:                        
                     particleState['fluidL'], normalizationMatrices, particleState['L.EVs'] = computeNormalizationMatrices(particleState, config)
-                    particleState['fluidNormals'], particleState['fluidLambdas'] = computeNormalsMaronne(particleState, config)
+                particleState['fluidNormals'], particleState['fluidLambdas'] = computeNormalsMaronne(particleState, config)
                 n = torch.nn.functional.normalize(computeLambdaGrad(particleState, config), dim = -1)
                 particleState['fluidNormals'] = n
             else:
