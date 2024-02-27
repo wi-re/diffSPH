@@ -51,6 +51,98 @@ def LinearCG(H, B, x0, i, j, tol : float =1e-5):
     return xk
 
 @torch.jit.script
+def BiCG(H, B, x0, i, j, tol : float =1e-5):
+    xk = x0
+    rk = torch.zeros_like(x0)
+    numParticles = rk.shape[0] // 2
+
+    rk[::2]  += scatter_sum(H[:,0,0] * xk[j * 2], i, dim=0, dim_size=numParticles)
+    rk[::2]  += scatter_sum(H[:,0,1] * xk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+    rk[1::2] += scatter_sum(H[:,1,0] * xk[j * 2], i, dim=0, dim_size=numParticles)
+    rk[1::2] += scatter_sum(H[:,1,1] * xk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+    
+    rk = B - rk
+    r0 = rk.clone()
+    pk = rk.clone()
+    
+    num_iter = 0
+    while torch.linalg.norm(rk) > tol and num_iter < 32:
+        apk = torch.zeros_like(x0)
+
+        apk[::2]  += scatter_sum(H[:,0,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
+        apk[::2]  += scatter_sum(H[:,0,1] * pk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        apk[1::2] += scatter_sum(H[:,1,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
+        apk[1::2] += scatter_sum(H[:,1,1] * pk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        alpha = torch.dot(rk, r0) / torch.dot(apk, r0)
+        xk = xk + alpha * pk
+        rk = rk - alpha * apk
+
+        beta = torch.dot(rk, r0) / torch.dot(r0, r0)
+        pk = rk + beta * pk
+        
+        num_iter += 1
+
+    return xk
+
+@torch.jit.script
+def BiCGStab_wJacobi(H, B, x0, i, j, tol : float =1e-5):
+    xk = x0
+    rk = torch.zeros_like(x0)
+    numParticles = rk.shape[0] // 2
+
+    # Calculate the Jacobi preconditioner
+    M_inv = 1 / torch.diagonal(H)
+
+    rk[::2]  += scatter_sum(H[:,0,0] * xk[j * 2], i, dim=0, dim_size=numParticles)
+    rk[::2]  += scatter_sum(H[:,0,1] * xk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+    rk[1::2] += scatter_sum(H[:,1,0] * xk[j * 2], i, dim=0, dim_size=numParticles)
+    rk[1::2] += scatter_sum(H[:,1,1] * xk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+    
+    rk = B - rk
+    r0 = rk.clone()
+
+    # Apply the preconditioner
+    zk = M_inv * rk
+    pk = zk.clone()
+    
+    num_iter = 0
+    while torch.linalg.norm(rk) > tol and num_iter < 32:
+        apk = torch.zeros_like(x0)
+
+        apk[::2]  += scatter_sum(H[:,0,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
+        apk[::2]  += scatter_sum(H[:,0,1] * pk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        apk[1::2] += scatter_sum(H[:,1,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
+        apk[1::2] += scatter_sum(H[:,1,1] * pk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        alpha = torch.dot(rk, r0) / torch.dot(apk, r0)
+        sk = rk - alpha * apk
+        ask = torch.zeros_like(x0)
+
+        ask[::2]  += scatter_sum(H[:,0,0] * sk[j * 2], i, dim=0, dim_size=numParticles)
+        ask[::2]  += scatter_sum(H[:,0,1] * sk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        ask[1::2] += scatter_sum(H[:,1,0] * sk[j * 2], i, dim=0, dim_size=numParticles)
+        ask[1::2] += scatter_sum(H[:,1,1] * sk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        omega = torch.dot(ask, sk) / torch.dot(ask, ask)
+        xk = xk + alpha * pk + omega * sk
+        rk = sk - omega * ask
+
+        # Apply the preconditioner
+        zk = M_inv * rk
+        beta = (torch.dot(rk, r0) / torch.dot(r0, r0)) * (alpha / omega)
+        pk = zk + beta * (pk - omega * apk)
+        
+        num_iter += 1
+
+    return xk
+
+@torch.jit.script
 def BiCGStab(H, B, x0, i, j, tol : float =1e-5):
     xk = x0
     rk = torch.zeros_like(x0)

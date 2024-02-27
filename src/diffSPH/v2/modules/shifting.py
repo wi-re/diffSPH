@@ -27,6 +27,7 @@ def LinearCG(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
     pk = -rk
     rk_norm = torch.linalg.norm(rk)
     
+    convergence = []
     num_iter = 0
     rk_norm = torch.linalg.norm(rk)
     while (torch.abs(torch.linalg.norm(rk) / rk_norm - 1) > 1e-4 or num_iter == 0) and num_iter < maxIter and torch.linalg.norm(rk) > tol:
@@ -50,7 +51,10 @@ def LinearCG(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
 
         # rk_norm = torch.linalg.norm(rk)
         # print(f'Iter: {num_iter}, Residual: {torch.linalg.norm(rk)}, Threshold {tol}, Ratio {torch.linalg.norm(rk) / rk_norm - 1}')
-    return xk
+
+        convergence.append(torch.linalg.norm(rk))
+
+    return xk, convergence, num_iter, torch.linalg.norm(rk)
 
 @torch.jit.script
 def BiCGStab(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
@@ -70,6 +74,7 @@ def BiCGStab(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
     
     num_iter = 0
 
+    convergence = []
     rk_norm = torch.linalg.norm(rk)
     while (torch.abs(torch.linalg.norm(rk) / rk_norm - 1) > 1e-4 or num_iter == 0) and num_iter < maxIter and torch.linalg.norm(rk) > tol:
     # while num_iter < maxIter and torch.linalg.norm(rk) > tol:
@@ -103,7 +108,9 @@ def BiCGStab(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
         # rk_norm = torch.linalg.norm(rk)
         # print(f'Iter: {num_iter}, Residual: {torch.linalg.norm(rk)}, Threshold {tol}, Ratio {torch.linalg.norm(rk) / rk_norm - 1}')
 
-    return xk
+        convergence.append(torch.linalg.norm(rk))
+
+    return xk, convergence, num_iter, torch.linalg.norm(rk)
 
 def deltaPlusShifting(particleState, config):
     W_0 = config['kernel']['function'].kernel(torch.tensor(config['particle']['dx'] / config['particle']['support']), torch.tensor(config['particle']['support']), dim = config['domain']['dim'])
@@ -154,7 +161,125 @@ def computeLambdaGrad(simulationState, config):
 from diffSPH.v2.sphOps import sphOperationFluidState
 from diffSPH.v2.modules.neighborhood import fluidNeighborSearch
 
-def computeShifting(particleState, config, computeRho = False, BiCG = True):
+@torch.jit.script
+def BiCG(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
+    xk = x0
+    rk = torch.zeros_like(x0)
+    numParticles = rk.shape[0] // 2
+
+    rk[::2]  += scatter_sum(H[:,0,0] * xk[j * 2], i, dim=0, dim_size=numParticles)
+    rk[::2]  += scatter_sum(H[:,0,1] * xk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+    rk[1::2] += scatter_sum(H[:,1,0] * xk[j * 2], i, dim=0, dim_size=numParticles)
+    rk[1::2] += scatter_sum(H[:,1,1] * xk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+    
+    rk = B - rk
+    r0 = rk.clone()
+    pk = rk.clone()
+    
+    num_iter = 0
+    convergence = []
+    rk_norm = torch.linalg.norm(rk)
+    while (torch.abs(torch.linalg.norm(rk) / rk_norm - 1) > 1e-4 or num_iter == 0) and num_iter < maxIter and torch.linalg.norm(rk) > tol:
+        rk_norm = torch.linalg.norm(rk)
+        apk = torch.zeros_like(x0)
+
+        apk[::2]  += scatter_sum(H[:,0,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
+        apk[::2]  += scatter_sum(H[:,0,1] * pk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        apk[1::2] += scatter_sum(H[:,1,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
+        apk[1::2] += scatter_sum(H[:,1,1] * pk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        alpha = torch.dot(rk, r0) / torch.dot(apk, r0)
+        xk = xk + alpha * pk
+        rk = rk - alpha * apk
+
+        beta = torch.dot(rk, r0) / torch.dot(r0, r0)
+        pk = rk + beta * pk
+        
+        num_iter += 1
+        convergence.append(torch.linalg.norm(rk))
+
+    return xk, convergence, num_iter, torch.linalg.norm(rk)
+
+# @torch.jit.script
+def BiCGStab_wJacobi(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
+    xk = x0
+    rk = torch.zeros_like(x0)
+    numParticles = rk.shape[0] // 2
+
+    # Calculate the Jacobi preconditioner
+    diag = torch.vstack((H[i == j, 0, 0], H[i == j, 1, 1])).flatten()
+    # diag[diag < 1e-8] = 1
+    M_inv = 1 / diag
+    M_inv[diag < 1e-8] = 0
+    # M_inv[torch.isnan(M_inv)] = 1
+
+    rk[::2]  += scatter_sum(H[:,0,0] * xk[j * 2], i, dim=0, dim_size=numParticles)
+    rk[::2]  += scatter_sum(H[:,0,1] * xk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+    rk[1::2] += scatter_sum(H[:,1,0] * xk[j * 2], i, dim=0, dim_size=numParticles)
+    rk[1::2] += scatter_sum(H[:,1,1] * xk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+    
+    rk = B - rk
+    r0 = rk.clone()
+
+    # Apply the preconditioner
+    # zk = torch.bmm(M_inv, rk.unsqueeze(-1)).squeeze(-1)
+    # print(f'i: {i.shape} x j: {j.shape} -> {i[i==j]}, {i}, {j}')
+    # print(f'rk: {rk}, M_inv: {M_inv}, @ {M_inv.shape} * {rk.shape}')
+    zk = M_inv * rk
+    pk = zk.clone()
+    
+    num_iter = 0
+    convergence = []
+    rk_norm = torch.linalg.norm(rk)
+    while (torch.abs(torch.linalg.norm(rk) / rk_norm - 1) > 1e-3 or num_iter == 0) and num_iter < maxIter and torch.linalg.norm(rk) > tol:
+        rk_norm = torch.linalg.norm(rk)
+        apk = torch.zeros_like(x0)
+
+        apk[::2]  += scatter_sum(H[:,0,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
+        apk[::2]  += scatter_sum(H[:,0,1] * pk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        apk[1::2] += scatter_sum(H[:,1,0] * pk[j * 2], i, dim=0, dim_size=numParticles)
+        apk[1::2] += scatter_sum(H[:,1,1] * pk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        alpha = torch.dot(rk, r0) / (torch.dot(apk, r0) + 1e-8)
+        sk = rk - alpha * apk
+        ask = torch.zeros_like(x0)
+
+        ask[::2]  += scatter_sum(H[:,0,0] * sk[j * 2], i, dim=0, dim_size=numParticles)
+        ask[::2]  += scatter_sum(H[:,0,1] * sk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        ask[1::2] += scatter_sum(H[:,1,0] * sk[j * 2], i, dim=0, dim_size=numParticles)
+        ask[1::2] += scatter_sum(H[:,1,1] * sk[j * 2 + 1], i, dim=0, dim_size=numParticles)
+
+        omega = torch.dot(ask, sk) / (torch.dot(ask, ask) + 1e-8)
+        xk = xk + alpha * pk + omega * sk
+        rk = sk - omega * ask
+
+        # Apply the preconditioner
+        zk = M_inv * rk
+        beta = (torch.dot(rk, r0) / (torch.dot(r0, r0)) + 1e-8) * (alpha / (omega + 1e-8))
+        pk = zk + beta * (pk - omega * apk)
+        if torch.abs(alpha) < 1e-8 or torch.abs(omega) < 1e-8 or torch.abs(beta) < 1e-8:
+            break
+
+        # print('###############################################################################')
+        # print(f'Iter: {num_iter}, Residual: {torch.linalg.norm(rk)}, Threshold {tol}')
+        # print(f'alpha: {alpha}, omega: {omega}, beta: {beta}')
+        # print(f'rk: {rk}, pk: {pk}, xk: {xk}')
+        # print(f'apk: {apk}, ask: {ask}')
+        # print(torch.dot(rk, r0))
+        # print(torch.dot(r0, r0))
+        # print((alpha / omega))
+
+        num_iter += 1
+        convergence.append(torch.linalg.norm(rk))
+
+    return xk, convergence, num_iter, torch.linalg.norm(rk)
+
+def computeShifting(particleState, config, computeRho = False, scheme = 'BiCG'):
     numParticles = particleState['fluidPositions'].shape[0]
     if config['shifting']['freeSurface']:  
         if config['shifting']['useExtendedMask']:
@@ -205,44 +330,71 @@ def computeShifting(particleState, config, computeRho = False, BiCG = True):
         x0[fs > 0.5,0] = 0
         x0[fs > 0.5,1] = 0
         x0 = x0.flatten()
-            
+        H[fs[i] > 0.5,:,:] = 0
+        H[fs[j] > 0.5,:,:] = 0
         iMasked = i[fs[i] < 0.5]
         jMasked = j[fs[i] < 0.5]
-        if BiCG:
-            xk = BiCGStab(H[fs[i] < 0.5], B, x0, iMasked, jMasked, maxIter = config['shifting']['maxSolveIter'])
+        if scheme == 'BiCG':
+            xk, convergence, iters, residual = BiCG(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
+        elif scheme == 'BiCGStab':
+            xk, convergence, iters, residual = BiCGStab(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
+        elif scheme == 'BiCGStab_wJacobi':
+            xk, convergence, iters, residual = BiCGStab_wJacobi(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
         else:
-            xk = LinearCG(H[fs[i] < 0.5], B, x0, iMasked, jMasked, maxIter = config['shifting']['maxSolveIter'])
+            xk, convergence, iters, residual = LinearCG(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
+        update =  torch.vstack((-xk[::2],-xk[1::2])).T# , J, H, B
+        # print(f'Iter: {iters}, Residual: {residual}, fs: xk fs: {update[fs > 0.5]}')
+        # if scheme == 'BiCG':
+        #     xk = BiCG(H[fs[i] < 0.5], B[fs[i] < 0.5], x0[fs[i] < 0.5], iMasked, jMasked, maxIter = config['shifting']['maxSolveIter'])
+        # elif scheme == 'BiCGStab':
+        #     xk = BiCGStab(H[fs[i] < 0.5], B[fs[i] < 0.5], x0[fs[i] < 0.5], iMasked, jMasked, maxIter = config['shifting']['maxSolveIter'])
+        # elif scheme == 'BiCGStab_wJacobi':
+        #     xk = BiCGStab_wJacobi(H[fs[i] < 0.5], B[fs[i] < 0.5], x0[fs[i] < 0.5], iMasked, jMasked, maxIter = config['shifting']['maxSolveIter'])
+        # else:
+        #     xk = LinearCG(H[fs[i] < 0.5], B[fs[i] < 0.5], x0[fs[i] < 0.5], iMasked, jMasked, maxIter = config['shifting']['maxSolveIter'])
     else:
         B[::2] = J[:,0]
         B[1::2] = J[:,1]
-        if BiCG:
-            xk = BiCGStab(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
+        if scheme == 'BiCG':
+            xk, convergence, iters, residual = BiCG(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
+        elif scheme == 'BiCGStab':
+            xk, convergence, iters, residual = BiCGStab(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
+        elif scheme == 'BiCGStab_wJacobi':
+            xk, convergence, iters, residual = BiCGStab_wJacobi(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
         else:
-            xk = LinearCG(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
+            xk, convergence, iters, residual = LinearCG(H, B, x0, i, j, maxIter = config['shifting']['maxSolveIter'])
 
     update =  torch.vstack((-xk[::2],-xk[1::2])).T# , J, H, B
-    return update, K, J, H, B
+    return update, K, J, H, B, convergence, iters, residual
 
 from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrices
-from diffSPH.v2.modules.surfaceDetection import computeNormalsMaronne, detectFreeSurfaceMaronne, expandFreeSurfaceMask
+from diffSPH.v2.modules.surfaceDetection import computeNormalsMaronne, detectFreeSurfaceMaronne, expandFreeSurfaceMask, computeColorField, computeColorFieldGradient, detectFreeSurfaceColorFieldGradient
 
 def solveShifting(particleState, config):
     initialPositions = torch.clone(particleState['fluidPositions'])
     initialDensities = torch.clone(particleState['fluidDensities'])
-
+    overallStates = []
     for i in range(config['shifting']['maxIterations']):
         particleState['fluidNeighborhood'] = fluidNeighborSearch(particleState, config)
         if config['shifting']['summationDensity']:
             particleState['fluidDensities'] = sphOperationFluidState(particleState, None, 'density')
 
         if config['shifting']['freeSurface']:
-            particleState['fluidL'], normalizationMatrices, particleState['L.EVs'] = computeNormalizationMatrices(particleState, config)
-            particleState['fluidNormals'], particleState['fluidLambdas'] = computeNormalsMaronne(particleState, config)
-            particleState['fluidFreeSurface'], cA, cB = detectFreeSurfaceMaronne(particleState, config)
+            if config['shifting']['surfaceDetection'] == 'Maronne':
+                particleState['fluidL'], normalizationMatrices, particleState['L.EVs'] = computeNormalizationMatrices(particleState, config)
+                particleState['fluidNormals'], particleState['fluidLambdas'] = computeNormalsMaronne(particleState, config)
+                particleState['fluidFreeSurface'], cA, cB = detectFreeSurfaceMaronne(particleState, config)
+            elif config['shifting']['surfaceDetection'] == 'colorGrad':
+                particleState['fluidColor'] = computeColorField(particleState, config)
+                particleState['fluidColorGradient'] = computeColorFieldGradient(particleState, config)
+                particleState['fluidFreeSurface'] = detectFreeSurfaceColorFieldGradient(particleState, config)
+                            
             particleState['fluidFreeSurfaceMask'] = expandFreeSurfaceMask(particleState, config)
 
+
         if config['shifting']['scheme'] == 'IPS':
-            update, K, J, H, B = computeShifting(particleState, config, computeRho = config['shifting']['summationDensity'], BiCG = config['shifting']['BiCG'])
+            update, K, J, H, B, convergence, iters, residual = computeShifting(particleState, config, computeRho = config['shifting']['summationDensity'], scheme = config['shifting']['solver'])
+            overallStates.append((convergence, iters, residual))
         else:
             update = -deltaPlusShifting(particleState, config)
             
@@ -254,6 +406,9 @@ def solveShifting(particleState, config):
                 n = torch.nn.functional.normalize(gradColorField, dim = -1)
                 particleState['fluidNormals'] = n
             elif config['shifting']['normalScheme'] == 'lambda':
+                if 'fluidL' not in particleState:                        
+                    particleState['fluidL'], normalizationMatrices, particleState['L.EVs'] = computeNormalizationMatrices(particleState, config)
+                    particleState['fluidNormals'], particleState['fluidLambdas'] = computeNormalsMaronne(particleState, config)
                 n = torch.nn.functional.normalize(computeLambdaGrad(particleState, config), dim = -1)
                 particleState['fluidNormals'] = n
             else:
@@ -264,14 +419,17 @@ def solveShifting(particleState, config):
 
             if config['shifting']['projectionScheme'] == 'dot':
                 result = update + torch.einsum('ij,ij->i', update, n)[:, None] * n
-                update[fsm > 0.5] = result[fsm > 0.5] * 0.125
+                update[fsm > 0.5] = result[fsm > 0.5] * config['shifting']['surfaceScaling']
                 update[fs > 0.5] = 0
-            else:
+            elif config['shifting']['projectionScheme'] == 'mat':
                 nMat = torch.einsum('ij, ik -> ijk', particleState['fluidNormals'], particleState['fluidNormals'])
                 M = torch.diag_embed(particleState['fluidPositions'].new_ones(particleState['fluidPositions'].shape)) - nMat
                 result = torch.bmm(M, update.unsqueeze(-1)).squeeze(-1)
-                update[fsm > 0.5] = result[fsm > 0.5] * 0.5
+                update[fsm > 0.5] = result[fsm > 0.5] * config['shifting']['surfaceScaling']
                 update[fs > 0.5] = 0
+            else:
+                update[fs > 0.5] = 0
+            
         
         spacing = config['particle']['dx']
         update = torch.clamp(update, -config['shifting']['threshold'] * spacing, config['shifting']['threshold'] * spacing)
@@ -282,7 +440,7 @@ def solveShifting(particleState, config):
     particleState['fluidPositions'] = initialPositions
     particleState['fluidDensities'] = initialDensities
 
-    return dx
+    return dx, overallStates
 
 
 from diffSPH.parameter import Parameter
@@ -293,14 +451,16 @@ def getParameters():
         Parameter('shifting', 'n', float, 4, required = False,export = False, hint = 'n parameter for the deltaPlus scheme'),
         Parameter('shifting', 'CFL', float, 1.5, required = False,export = False, hint = 'CFL parameter for the deltaPlus scheme'),
         Parameter('shifting', 'computeMach', bool, False, required = False,export = False, hint = 'Compute Mach number for the deltaPlus scheme'),
-        Parameter('shifting', 'BiCG', bool, True, required = False, export = False, hint = 'Use BiCGStab for the IPS scheme'),
+        Parameter('shifting', 'solver', str, 'BiCGStab_wJacobi', required = False, export = False, hint = 'Use BiCGStab for the IPS scheme'),
         Parameter('shifting', 'freeSurface', bool, False, required = False,export = False, hint = 'Use free surface detection for shifting scheme'),
         Parameter('shifting', 'normalScheme', str, 'lambda', required = False,export = False, hint = 'Scheme for normal computation (color, lambda, default)'),
         Parameter('shifting', 'projectionScheme', str, 'mat', required = False,export = False, hint = 'Scheme for normal projection (dot, M)'),
         Parameter('shifting', 'threshold', float, 0.25, required = False,export = False, hint = 'Threshold for the shifting scheme'),
+        Parameter('shifting', 'surfaceScaling', float, 0.125, required = False,export = False, hint = 'Scaling for the surface projection'),
         Parameter('shifting', 'maxIterations', int, 32, required = False,export = False, hint = 'Maximum number of iterations for the shifting scheme'),
         Parameter('shifting', 'summationDensity', bool, True, required = False,export = False, hint = 'Use summation density for the shifting scheme'),
         Parameter('shifting', 'useExtendedMask', bool, False, required = False,export = False, hint = 'Use extended mask for the shifting scheme'),
         Parameter('shifting', 'initialization', str, 'deltaPlus', required = False,export = False, hint = 'Initialization scheme for the shifting scheme (deltaPlus, random)'),
         Parameter('shifting', 'maxSolveIter', int, 32, required = False,export = False, hint = 'Maximum number of iterations for the linear solver in the shifting scheme'),
+        Parameter('shifting', 'surfaceDetection', str, 'Maronne', required = False,export = False, hint = 'Surface detection scheme for the free surface (Maronne, colorGrad)'),
     ]
