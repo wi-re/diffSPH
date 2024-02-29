@@ -7,8 +7,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import torch
 
 
-def plotSDF(fx, X, Y, extent, dim, ngrid = 255):
+def plotSDF(fx_, X_, Y_, extent, dim, ngrid = 255):
     fig, axis = plt.subplots(1, 3, figsize=(14,4), sharex = False, sharey = False, squeeze = False)
+
+    X = X_.detach().cpu()
+    Y = Y_.detach().cpu()
+    fx = fx_.detach().cpu()
 
     fx = fx.reshape(ngrid, ngrid)
     output = computeGradient(fx, extent, dim, 1)

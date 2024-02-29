@@ -185,9 +185,9 @@ def computeFiniteDifference(fx, dim, extent, order, accuracy):
     centralStencil, forwardStencil, backwardStencil = getStencils(order, accuracy)
     h = extent / (ngrid - 1)
     unfolded = fx.transpose(dim,-1).unfold(-1, len(centralStencil),1)
-    central = torch.sum(centralStencil * unfolded, dim = -1) * (1/h**order)
-    forward = torch.vstack([torch.tensordot(forwardStencil, fx.transpose(dim, 0)[a: a + len(forwardStencil),:], dims=1) * (1/h**order) for a in range(accuracy)]).mT
-    backward = torch.vstack([torch.tensordot(backwardStencil, fx.transpose(dim, 0)[-len(backwardStencil)-a:fx.shape[0] - a,:], dims=1) * (1/h**order) for a in range(accuracy)]).mT
+    central = torch.sum(centralStencil.to(fx.device) * unfolded, dim = -1) * (1/h**order)
+    forward = torch.vstack([torch.tensordot(forwardStencil.to(fx.device), fx.transpose(dim, 0)[a: a + len(forwardStencil),:], dims=1) * (1/h**order) for a in range(accuracy)]).mT
+    backward = torch.vstack([torch.tensordot(backwardStencil.to(fx.device), fx.transpose(dim, 0)[-len(backwardStencil)-a:fx.shape[0] - a,:], dims=1) * (1/h**order) for a in range(accuracy)]).mT
     output = torch.hstack([forward, central, backward]).transpose(dim, -1)
     return output
 
@@ -197,7 +197,7 @@ def computeGradient(fx, extent, dim = 2, accuracy = 1):
         wasScalar = True
         fx = fx.unsqueeze(-1)
     outputShape = fx.shape + (dim,)
-    output = torch.zeros(outputShape, dtype = torch.float32)
+    output = torch.zeros(outputShape, dtype = torch.float32, device = fx.device)
     inputIndices = np.ndindex(fx.shape[dim:])
     for input in inputIndices:
         for i in range(dim):

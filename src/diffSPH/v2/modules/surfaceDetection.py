@@ -56,7 +56,9 @@ def expandFreeSurfaceMask(fluidState, simConfig):
     i,j = fluidState['fluidNeighborhood']['indices']
     numParticles = fluidState['fluidPositions'].shape[0]
 
-    fsm = scatter_sum(fs[j], i, dim = 0, dim_size = numParticles)
+    fsm = torch.clone(fs)
+    for ii in range(simConfig['surfaceDetection']['expansionIterations']):
+        fsm = scatter_sum(fsm[j], i, dim = 0, dim_size = numParticles)
     return fsm > 0
 
 def computeColorField(fluidState, simConfig):
@@ -138,5 +140,6 @@ def getParameters():
         Parameter('surfaceDetection', 'colorFieldGradientThreshold', float, 10.0, required = False,export = False, hint = 'Threshold for the color field gradient to detect free surface'),
         Parameter('surfaceDetection', 'colorFieldThreshold', float, 0.8, required = False,export = False, hint = 'Threshold for the free surface detection using mean neighborhood sizes'),
         Parameter('surfaceDetection', 'BarecascoThreshold', float, np.pi / 3, required = False, export = False, hint = 'Threshold for the free surface detection using Barecasco et al. method'),
-        Parameter('surfaceDetection', 'distanceIterations', int, 16, required = False, export = False, hint = 'Number of iterations to compute the surface distance')
+        Parameter('surfaceDetection', 'distanceIterations', int, 16, required = False, export = False, hint = 'Number of iterations to compute the surface distance'),
+        Parameter('surfaceDetection', 'expansionIterations', int, 2, required = False, export = False, hint = 'Number of iterations to expand the free surface mask')
     ]
