@@ -113,6 +113,7 @@ def BiCGStab(H, B, x0, i, j, tol : float =1e-5, maxIter : int = 32):
     return xk, convergence, num_iter, torch.linalg.norm(rk)
 
 def deltaPlusShifting(particleState, config):
+    W_0 = config['kernel']['function'].kernel(torch.tensor(config['particle']['dx'] / config['particle']['support'] * config['kernel']['kernelScale']), torch.tensor(config['particle']['support']), dim = config['domain']['dim'])
     W_0 = config['kernel']['function'].kernel(torch.tensor(config['particle']['dx'] / config['particle']['support']), torch.tensor(config['particle']['support']), dim = config['domain']['dim'])
 
     (i,j) = particleState['fluidNeighborhood']['indices']
@@ -133,7 +134,7 @@ def deltaPlusShifting(particleState, config):
         Ma = 0.1
     else:
         Ma = torch.amax(torch.linalg.norm(particleState['fluidVelocities'], dim = -1)) / config['fluid']['cs']
-    shiftScaling = -CFL * Ma * (particleState['fluidSupports'] * 2)**2
+    shiftScaling = -CFL * Ma * (particleState['fluidSupports'] / config['kernel']['kernelScale'] * 2)**2
     # print(particleState['fluidSupports'])
     return shiftScaling.view(-1,1) * shiftAmount
 
@@ -308,7 +309,7 @@ def computeShifting(particleState, config, computeRho = False, scheme = 'BiCG'):
     H = H * omega[j,None,None]
 
     h2 = particleState['fluidSupports'].repeat(2,1).T.flatten()
-    x0 = torch.rand(numParticles * 2).to(rij.device).type(rij.dtype) * h2 / 4 - h2 / 8
+    x0 = torch.rand(numParticles * 2).to(rij.device).type(rij.dtype) * config['particle']['dx'] / 4 - config['particle']['dx'] / 8
     if config['shifting']['initialization'] == 'deltaPlus':
         x0 = -deltaPlusShifting(particleState, config).flatten() * 0.5
     if config['shifting']['initialization'] == 'deltaMinus':
@@ -426,13 +427,18 @@ def solveShifting(particleState, config):
                 M = torch.diag_embed(particleState['fluidPositions'].new_ones(particleState['fluidPositions'].shape)) - nMat
                 result = torch.bmm(M, update.unsqueeze(-1)).squeeze(-1)
                 update[fsm > 0.5] = result[fsm > 0.5] * config['shifting']['surfaceScaling']
-                update[fs > 0.5] = 0
+                # update[fs > 0.5] = 0
             else:
                 update[fs > 0.5] = 0
             
         
         spacing = config['particle']['dx']
+
+        print(
+            f'Iter: {i}, Residual: {residual}, Threshold {config["shifting"]["threshold"] * spacing}, max Update = {update.max()} Ratio {update.max() / (config["shifting"]["threshold"] * spacing)}')
+
         update = torch.clamp(update, -config['shifting']['threshold'] * spacing, config['shifting']['threshold'] * spacing)
+        print(f'Update: {update.max()} Ratio: {update.max() / (config["shifting"]["threshold"] * spacing)}')
         particleState['fluidPositions'] = particleState['fluidPositions'] - update
 
         # print(f'J: {J.abs().max()}')
@@ -467,7 +473,7 @@ def getParameters():
 
 
 from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrices
-from diffSPH.v2.modules.surfaceDetection import computeNormalsMaronne, detectFreeSurfaceMaronne, expandFreeSurfaceMask, computeColorField, computeColorFieldGradient, detectFreeSurfaceColorFieldGradient
+from diffSPH.v2.modules.surfaceDetection import detectFreeSurfaceBarecasco, computeNormalsMaronne, detectFreeSurfaceMaronne, expandFreeSurfaceMask, computeColorField, computeColorFieldGradient, detectFreeSurfaceColorFieldGradient
 # from diffSPH.v2.modules.shifting import computeLambdaGrad, deltaPlusShifting, computeShifting, BiCGStab_wJacobi, BiCG, LinearCG, BiCGStab
 
 def computeShifting(particleState, config, computeRho = False, scheme = 'BiCG'):
@@ -499,6 +505,7 @@ def computeShifting(particleState, config, computeRho = False, scheme = 'BiCG'):
     H = H * omega[j,None,None]
 
     h2 = particleState['fluidSupports'].repeat(2,1).T.flatten()
+    h2 = config['particle']['dx']
     x0 = torch.rand(numParticles * 2).to(rij.device).type(rij.dtype) * h2 / 4 - h2 / 8
     if config['shifting']['initialization'] == 'deltaPlus':
         x0 = -deltaPlusShifting(particleState, config).flatten() * 0.5
@@ -576,6 +583,8 @@ def solveShifting(particleState, config):
                 particleState['fluidColor'] = computeColorField(particleState, config)
                 particleState['fluidColorGradient'] = computeColorFieldGradient(particleState, config)
                 particleState['fluidFreeSurface'] = detectFreeSurfaceColorFieldGradient(particleState, config)
+            elif config['shifting']['surfaceDetection'] == 'Barcasco':
+                particleState['fluidFreeSurface'] = detectFreeSurfaceBarecasco(particleState, config)
                             
             particleState['fluidFreeSurfaceMask'] = expandFreeSurfaceMask(particleState, config)
 
@@ -594,8 +603,8 @@ def solveShifting(particleState, config):
                 n = torch.nn.functional.normalize(gradColorField, dim = -1)
                 particleState['fluidNormals'] = n
             elif config['shifting']['normalScheme'] == 'lambda':
-                if 'fluidL' not in particleState:                        
-                    particleState['fluidL'], normalizationMatrices, particleState['L.EVs'] = computeNormalizationMatrices(particleState, config)
+                # if 'fluidL' not in particleState:                        
+                particleState['fluidL'], normalizationMatrices, particleState['L.EVs'] = computeNormalizationMatrices(particleState, config)
                 particleState['fluidNormals'], particleState['fluidLambdas'] = computeNormalsMaronne(particleState, config)
                 n = torch.nn.functional.normalize(computeLambdaGrad(particleState, config), dim = -1)
                 particleState['fluidNormals'] = n
@@ -614,16 +623,21 @@ def solveShifting(particleState, config):
                 nMat = torch.einsum('ij, ik -> ikj', particleState['fluidNormals'], particleState['fluidNormals'])
                 M = torch.diag_embed(particleState['fluidPositions'].new_ones(particleState['fluidPositions'].shape)) - nMat
                 result = torch.bmm(M, update.unsqueeze(-1)).squeeze(-1)
-                update[fsm > 0.5] = result[fsm > 0.5] * config['shifting']['surfaceScaling']
+                update[fsm > 0.5] = result[fsm > 0.5] 
                 update[particleState['fluidLambdas'] < 0.4] = 0
-                # update[fs > 0.5] = 0
+                update[fs > 0.5] = update[fs > 0.5] * config['shifting']['surfaceScaling']
             else:
                 update[particleState['fluidLambdas'] < 0.4] = 0
                 # update[fs > 0.5] = 0
             
         
         spacing = config['particle']['dx']
+        # print(
+        #     f'Iter: {i}, Threshold {config["shifting"]["threshold"] * spacing}, max Update = {update.max()} Ratio {update.max() / (config["shifting"]["threshold"] * spacing)}')
+
         update = torch.clamp(update, -config['shifting']['threshold'] * spacing, config['shifting']['threshold'] * spacing)
+        # print(f'Update: {update.max()} Ratio: {update.max() / (config["shifting"]["threshold"] * spacing)}')
+        # update = torch.clamp(update, -config['shifting']['threshold'] * spacing, config['shifting']['threshold'] * spacing)
         particleState['fluidPositions'] = particleState['fluidPositions'] - update
 
         # print(f'J: {J.abs().max()}')

@@ -20,7 +20,7 @@ def detectFreeSurfaceMaronne(fluidState, simConfig):
     hij = fluidState['fluidNeighborhood']['supports']
 
     
-    T = particles + n * supports.view(-1,1) / 3
+    T = particles + n * supports.view(-1,1) / simConfig['kernel']['kernelScale'] / 3
 
     tau = torch.vstack((-n[:,1], n[:,0])).mT
     xjt = particles[j] - T[i]
@@ -36,7 +36,7 @@ def detectFreeSurfaceMaronne(fluidState, simConfig):
     condB = (condB1 & condB2) & (i != j)
     cB = scatter_sum(condB, i, dim = 0, dim_size = numParticles)
     
-    fs = torch.where(~cA & ~cB, 1.,0.)
+    fs = torch.where(~cA & ~cB & (torch.linalg.norm(n, dim = -1) > 0.5), 1.,0.)
     return fs, cA, cB
 
 # See Maronne et al: Fast free-surface detection and level-set function definition in SPH solvers
@@ -71,7 +71,7 @@ def computeColorFieldGradient(fluidState, simConfig):
 
 def detectFreeSurfaceColorFieldGradient(fluidState, simConfig):
     gradColorField = fluidState['fluidColorGradient']
-    fs = torch.linalg.norm(gradColorField, dim = -1) > simConfig['surfaceDetection']['colorFieldGradientThreshold'] * fluidState['fluidSupports']
+    fs = torch.linalg.norm(gradColorField, dim = -1) > simConfig['surfaceDetection']['colorFieldGradientThreshold'] * fluidState['fluidSupports'] / simConfig['kernel']['kernelScale']
     return fs
 
 def detectFreeSurfaceColorField(fluidState, simConfig):

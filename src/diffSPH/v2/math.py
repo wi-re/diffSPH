@@ -94,7 +94,7 @@ def scatter_sum(src: torch.Tensor, index: torch.Tensor, dim: int = -1,
 
 import numpy as np
 @torch.jit.script
-def volumeToSupport(volume : float, targetNeighbors : int, dim : int):
+def volumeToSupport(volume : float, targetNeighbors : float, dim : int):
     if dim == 1:
         # N_h = 2 h / v -> h = N_h * v / 2
         return targetNeighbors * volume / 2

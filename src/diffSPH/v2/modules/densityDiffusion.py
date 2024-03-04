@@ -40,7 +40,7 @@ def computeDensityDeltaTerm(fluidState, config):
         rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidNeighborhood']['supports'])
         psi_ij = -rho_ij.view(-1,1) * fluidState['fluidNeighborhood']['vectors']
 
-    return config['diffusion']['delta'] * fluidState['fluidSupports'] * config['fluid']['cs'] * sphOperationFluidState(fluidState, psi_ij, operation = 'divergence', gradientMode='difference')
+    return config['diffusion']['delta'] * fluidState['fluidSupports'] / config['kernel']['kernelScale'] * config['fluid']['cs'] * sphOperationFluidState(fluidState, psi_ij, operation = 'divergence', gradientMode='difference')
 
 
 

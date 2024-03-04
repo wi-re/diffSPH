@@ -25,7 +25,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
         if dxdt is not None:
             perennialState['fluidPositions'] += dxdt * dt
 
-        perennialState['fluidPositions'] += perennialState['fluidVelocities'] * dt
+        # perennialState['fluidPositions'] += perennialState['fluidVelocities'] * dt
     elif scheme == 'explicitEuler':
         dxdt, dudt, drhodt = simulationStep(perennialState, config)
         perennialState['fluidPositions'] += perennialState['fluidVelocities'] * dt
@@ -74,7 +74,10 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
             perennialState['fluidDensities'] += 0.5 * drhodt * dt
     elif scheme == 'RK4':
         # Compute k1
-        dxdt_k1, dudt_k1, drhodt_k1 = simulationStep(perennialState, config)
+        tempState = copy.deepcopy(perennialState)
+        dxdt_k1, dudt_k1, drhodt_k1 = simulationStep(tempState, config)
+
+        
         tempState = copy.deepcopy(perennialState)
         if dudt_k1 is not None:
             tempState['fluidVelocities'] += dudt_k1 * dt / 2
@@ -82,7 +85,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
             tempState['fluidPositions'] += dxdt_k1 * dt / 2
         if drhodt_k1 is not None:
             tempState['fluidDensities'] += drhodt_k1 * dt / 2
-        tempState['fluidPositions'] += perennialState['fluidVelocities'] * dt / 2
+        # tempState['fluidPositions'] += perennialState['fluidVelocities'] * dt / 2
 
         # Compute k2
         dxdt_k2, dudt_k2, drhodt_k2 = simulationStep(tempState, config)
@@ -93,34 +96,36 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
             tempState['fluidPositions'] += dxdt_k2 * dt / 2
         if drhodt_k1 is not None:
             tempState['fluidDensities'] += drhodt_k2 * dt / 2
-        tempState['fluidPositions'] += (perennialState['fluidVelocities'] + dudt_k2 * dt / 2) * dt / 2
+        # tempState['fluidPositions'] += (perennialState['fluidVelocities'] + dudt_k2 * dt / 2) * dt / 2
 
         # Compute k3
         dxdt_k3, dudt_k3, drhodt_k3 = simulationStep(tempState, config)
         tempState = copy.deepcopy(perennialState)
         if dudt_k1 is not None:
-            tempState['fluidVelocities'] += dudt_k3 * dt / 2
+            tempState['fluidVelocities'] += dudt_k3 * dt
         if dxdt_k1 is not None:
-            tempState['fluidPositions'] += dxdt_k3 * dt / 2
+            tempState['fluidPositions'] += dxdt_k3 * dt 
         if drhodt_k1 is not None:
-            tempState['fluidDensities'] += drhodt_k3 * dt / 2
-        tempState['fluidPositions'] += (perennialState['fluidVelocities'] + dudt_k3 * dt / 2) * dt
+            tempState['fluidDensities'] += drhodt_k3 * dt
+        # tempState['fluidPositions'] += (perennialState['fluidVelocities'] + dudt_k3 * dt / 2) * dt
 
         # Compute k4
         dxdt_k4, dudt_k4, drhodt_k4 = simulationStep(tempState, config)
 
         # Update the position and velocity
-        if dudt_k1 is not None:
-            perennialState['fluidPositions'] += dt * (perennialState['fluidVelocities'] + (dudt_k1 + 2*dudt_k2 + 2*dudt_k3 + dudt_k4) * dt / 6)
-            perennialState['fluidVelocities'] += (dudt_k1 + 2*dudt_k2 + 2*dudt_k3 + dudt_k4) * dt / 6
-            dudt = (dudt_k1 + 2*dudt_k2 + 2*dudt_k3 + dudt_k4) * dt / 6
-        if drhodt_k1 is not None:
-            perennialState['fluidDensities'] += (drhodt_k1 + 2*drhodt_k2 + 2*drhodt_k3 + drhodt_k4) * dt / 6
-            drhodt = (drhodt_k1 + 2*drhodt_k2 + 2*drhodt_k3 + drhodt_k4) * dt / 6
         if dxdt_k1 is not None:
-            perennialState['fluidPositions'] += (dxdt_k1 + 2*dxdt_k2 + 2*dxdt_k3 + dxdt_k4) * dt / 6
             dxdt = (dxdt_k1 + 2*dxdt_k2 + 2*dxdt_k3 + dxdt_k4) * dt / 6
-
+            tempState['fluidPositions'] = perennialState['fluidPositions'] + dxdt
+            perennialState['fluidPositions'] = tempState['fluidPositions']
+        if dudt_k1 is not None:
+            dudt = (dudt_k1 + 2*dudt_k2 + 2*dudt_k3 + dudt_k4) * dt / 6
+            tempState['fluidVelocities'] = perennialState['fluidVelocities'] + dudt
+            perennialState['fluidVelocities'] = tempState['fluidVelocities']
+        if drhodt_k1 is not None:
+            drhodt = (drhodt_k1 + 2*drhodt_k2 + 2*drhodt_k3 + drhodt_k4) * dt / 6
+            tempState['fluidDensities'] = perennialState['fluidDensities'] + drhodt
+            perennialState['fluidDensities'] = tempState['fluidDensities']
+        # return tempState, dxdt, dudt, drhodt
         # perennialState['fluidVelocities'] += (k1 + 2*k2 + 2*k3 + k4) * dt / 6
         # dudt = (k1 + 2*k2 + 2*k3 + k4) * dt / 6
     return perennialState, dxdt, dudt, drhodt

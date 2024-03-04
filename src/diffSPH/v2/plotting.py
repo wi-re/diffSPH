@@ -200,13 +200,13 @@ def mapToGrid(visualizationState, quantity):
 from diffSPH.v2.modules.neighborhood import neighborSearch, fluidNeighborSearch
 from diffSPH.kernels import getKernel
 from diffSPH.v2.sphOps import sphOperationFluidState, sphOperation
-
+import copy
 
 def prepVisualizationState(perennialState, config, nGrid = 128):
-    visualizationState = {}
+    visualizationState = copy.deepcopy(perennialState)
 
-    visualizationState['fluidNeighborhood'] = fluidNeighborSearch(perennialState, config)
-    visualizationState['fluidDensities'] = sphOperationFluidState(perennialState, None, 'density')
+    visualizationState['fluidNeighborhood'] = fluidNeighborSearch(visualizationState, config)
+    visualizationState['fluidDensities'] = sphOperationFluidState(visualizationState, None, 'density')
     visualizationState['fluidMasses'] = perennialState['fluidMasses']
 
     visualizationState['fluidVelocities'] = perennialState['fluidVelocities']

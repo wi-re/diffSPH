@@ -21,7 +21,7 @@ def countUniqueEntries(indices, positions):
 
 
 @torch.jit.script
-def volumeToSupport(volume : float, targetNeighbors : int, dim : int):
+def volumeToSupport(volume : float, targetNeighbors : float, dim : int):
     """
     Calculates the support radius based on the given volume, target number of neighbors, and dimension.
 

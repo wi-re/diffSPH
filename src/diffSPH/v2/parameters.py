@@ -10,7 +10,7 @@ particleParameters = [
 ]
 
 fluidParameters = [
-    Parameter('fluid', 'rho0', float, 2000, required = False, export = True),
+    Parameter('fluid', 'rho0', float, 1000, required = False, export = True),
     Parameter('fluid', 'mu', float, 0.1, required = False, export = True),
     Parameter('fluid', 'cs', float, 10, required = False, export = True),
 ]
@@ -114,6 +114,8 @@ def parseDefaultParameters(config):
     config['kernel']['function'], config['kernel']['targetNeighbors'] = parseKernelConfig(config)
     config['particle']['dx'], config['particle']['defaultVolume'], config['particle']['defaultSupport'], \
         config['particle']['volume'], config['particle']['support'] = parseParticleConfig(config)
+    config['kernel']['kernelScale'] = config['particle']['support'] / (2 * config['particle']['dx'])
+    config['particle']['smoothingLength'] = 2 * config['particle']['dx']
     return config
     # print(config)
     
