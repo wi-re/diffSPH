@@ -70,5 +70,5 @@ def getParameters():
         Parameter('EOS', 'molarMass', float, 0.02897, required = False,export = False, hint = 'Molar mass of the gas'),
         Parameter('EOS', 'polytropicExponent', float, 7, required = False,export = False, hint = 'Exponent for the Tait equation of state'),
         Parameter('EOS', 'kappa', float, 1.3, required = False,export = False, hint = 'Kappa for the less stiff Tait equation of state'),
-        Parameter('EOS', 'type', str, 'TaitEOS', required = False,export = False, hint = 'Type of equation of state')
+        Parameter('EOS', 'type', str, 'isoThermal', required = False,export = False, hint = 'Type of equation of state')
     ]

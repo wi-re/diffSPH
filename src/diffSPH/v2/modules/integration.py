@@ -11,13 +11,14 @@ def computeCFL(simulationState, config):
     
 import copy
 def integrate(simulationStep, perennialState, config, previousStep = None):
-    dt = config['integration']['dt']
+    dt = config['timestep']['dt']
     scheme = config['integration']['scheme']
     assert scheme in ['semiImplicitEuler', 'explicitEuler', 'verlet', 'leapfrog', 'RK4'], f"Integration scheme {scheme} not recognized"
     dxdt, dudt, drhodt = (None, None, None)
 
+    tempState = copy.deepcopy(perennialState)
     if scheme == 'semiImplicitEuler':
-        dxdt, dudt, drhodt = simulationStep(perennialState, config)
+        dxdt, dudt, drhodt = simulationStep(tempState, config)
         if dudt is not None:
             perennialState['fluidVelocities'] += dudt * dt
         if drhodt is not None:
@@ -27,7 +28,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
 
         # perennialState['fluidPositions'] += perennialState['fluidVelocities'] * dt
     elif scheme == 'explicitEuler':
-        dxdt, dudt, drhodt = simulationStep(perennialState, config)
+        dxdt, dudt, drhodt = simulationStep(tempState, config)
         perennialState['fluidPositions'] += perennialState['fluidVelocities'] * dt
         if dudt is not None:
             perennialState['fluidVelocities'] += dudt * dt
@@ -40,7 +41,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
             previousStep = simulationStep(perennialState, config)
         
         perennialState['fluidPositions'] += perennialState['fluidVelocities'] * dt + 0.5 * previousStep * dt ** 2
-        dxdt, dudt, drhodt = simulationStep(perennialState, config)
+        dxdt, dudt, drhodt = simulationStep(tempState, config)
         if dudt is not None:
             perennialState['fluidVelocities'] += 0.5 * (dudt + previousStep[1]) * dt
         if drhodt is not None:
@@ -49,7 +50,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
             perennialState['fluidPositions'] += 0.5 * (dxdt + previousStep[0]) * dt
     elif scheme == 'leapfrog':
         if previousStep is None:
-            previousStep = simulationStep(perennialState, config)
+            previousStep = simulationStep(tempState, config)
 
         # Compute the new velocity at t + dt/2
         if previousStep[0] is not None:
@@ -63,7 +64,8 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
         perennialState['fluidPositions'] += perennialState['fluidVelocities'] * dt
 
         # Compute the new acceleration at t + dt
-        dxdt, dudt, drhodt = simulationStep(perennialState, config)
+        tempState = copy.deepcopy(perennialState)
+        dxdt, dudt, drhodt = simulationStep(tempState, config)
 
         # Compute the new velocity at t + dt
         if dudt is not None:
@@ -74,7 +76,6 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
             perennialState['fluidDensities'] += 0.5 * drhodt * dt
     elif scheme == 'RK4':
         # Compute k1
-        tempState = copy.deepcopy(perennialState)
         dxdt_k1, dudt_k1, drhodt_k1 = simulationStep(tempState, config)
 
         
@@ -114,31 +115,38 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
 
         # Update the position and velocity
         if dxdt_k1 is not None:
-            dxdt = (dxdt_k1 + 2*dxdt_k2 + 2*dxdt_k3 + dxdt_k4) * dt / 6
-            tempState['fluidPositions'] = perennialState['fluidPositions'] + dxdt
-            perennialState['fluidPositions'] = tempState['fluidPositions']
+            dxdt = (dxdt_k1 + 2*dxdt_k2 + 2*dxdt_k3 + dxdt_k4)  / 6
+            perennialState['fluidPositions'] = perennialState['fluidPositions'] + dxdt* dt
+            # perennialState['fluidPositions'] = tempState['fluidPositions']
         if dudt_k1 is not None:
-            dudt = (dudt_k1 + 2*dudt_k2 + 2*dudt_k3 + dudt_k4) * dt / 6
-            tempState['fluidVelocities'] = perennialState['fluidVelocities'] + dudt
-            perennialState['fluidVelocities'] = tempState['fluidVelocities']
+            dudt = (dudt_k1 + 2*dudt_k2 + 2*dudt_k3 + dudt_k4)  / 6
+            perennialState['fluidVelocities'] = perennialState['fluidVelocities'] + dudt* dt
+            # perennialState['fluidVelocities'] = tempState['fluidVelocities']
         if drhodt_k1 is not None:
-            drhodt = (drhodt_k1 + 2*drhodt_k2 + 2*drhodt_k3 + drhodt_k4) * dt / 6
-            tempState['fluidDensities'] = perennialState['fluidDensities'] + drhodt
-            perennialState['fluidDensities'] = tempState['fluidDensities']
+            drhodt = (drhodt_k1 + 2*drhodt_k2 + 2*drhodt_k3 + drhodt_k4)  / 6
+            perennialState['fluidDensities'] = perennialState['fluidDensities'] + drhodt* dt
+            # perennialState['fluidDensities'] = tempState['fluidDensities']
         # return tempState, dxdt, dudt, drhodt
         # perennialState['fluidVelocities'] += (k1 + 2*k2 + 2*k3 + k4) * dt / 6
         # dudt = (k1 + 2*k2 + 2*k3 + k4) * dt / 6
-    return perennialState, dxdt, dudt, drhodt
+
+    # sync perennialState with tempState
+    for k in perennialState.keys():
+        if k not in ['fluidVelocities', 'fluidPositions', 'fluidDensities']:
+            perennialState[k] = tempState[k]
+    if dxdt is not None:
+        perennialState['fluid_dxdt'] = dxdt 
+    if dudt is not None:
+        perennialState['fluid_dudt'] = dudt 
+    if drhodt is not None:
+        perennialState['fluid_drhodt'] = drhodt 
+
+    return perennialState, tempState, dxdt, dudt, drhodt
 
 
     
 from diffSPH.parameter import Parameter
 def getParameters():
     return [
-    Parameter('integration', 'dt', float, 0.01, required = False, export = True),
-    Parameter('integration', 'adaptiveTimestep', bool, False, required = False, export = True),
-    Parameter('integration', 'CFL', float, 0.25, required = False, export = True),
-    Parameter('integration', 'maxDt', float, 0.1, required = False, export = True),
-    Parameter('integration', 'minDt', float, 0.001, required = False, export = True),
-    Parameter('integration', 'scheme', 'string', 'semiImplicitEuler', hint = 'The integration scheme to use. Options are: semiImplicitEuler, explicitEuler, verlet, leapfrog, RK4', required = False, export = True),
+    Parameter('integration', 'scheme', 'string', 'RK4', hint = 'The integration scheme to use. Options are: semiImplicitEuler, explicitEuler, verlet, leapfrog, RK4', required = False, export = True),
     ]

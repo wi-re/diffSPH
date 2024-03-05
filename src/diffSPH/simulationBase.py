@@ -436,7 +436,7 @@ class SPHSimulation():
             # self.simulationState[    'realParticles'] = self.simulationState['fluidPosition'].shape[0]
             self.simulationState[             'time'] = 0.
             self.simulationState[         'timestep'] = int(0)
-            self.simulationState[               'dt'] = self.config['integration']['dt']
+            self.simulationState[               'dt'] = self.config['timestep']['dt']
             
             if self.verbose: print('Initializing modules')
             for module in self.modules:        
@@ -478,7 +478,7 @@ class SPHSimulation():
                 self.outFile.attrs['deltaDiffusion'] = self.config['diffusion']['delta']
                 self.outFile.attrs['kinematicDiffusion'] = self.config['diffusion']['kinematic']
                 self.outFile.attrs['staticBoundary'] = self.config['export']['staticBoundary']
-                self.outFile.attrs['initialDt'] = self.config['integration']['dt']
+                self.outFile.attrs['initialDt'] = self.config['timestep']['dt']
                 self.outFile.attrs['integrationScheme'] = self.config['integration']['scheme']
                 self.outFile.attrs['fixedDt'] = self.config['timestep']['fixed']
 

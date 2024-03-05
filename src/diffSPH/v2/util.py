@@ -42,3 +42,18 @@ def volumeToSupport(volume : float, targetNeighbors : float, dim : int):
     else:
         # N_h = 4/3 \pi h^3 / v -> h = \sqrt[3]{N_h * v / \pi * 3/4}
         return torch.pow(targetNeighbors * volume / np.pi * 3 /4, 1/3)
+    
+
+def printState(particleState):
+    for k in particleState.keys():
+        if isinstance(particleState[k], torch.Tensor):
+            print(f'state[{k:24s}]: min: {particleState[k].min():+.3e}, max: {particleState[k].max():+.3e}, median: {particleState[k].median():+.3e} [{particleState[k].shape}\t@ {particleState[k].device}\tx {particleState[k].dtype}\t]')
+        elif isinstance(particleState[k], dict):
+            print(f'state[{k:24s}]: dict')
+            for kk in particleState[k].keys():
+                if isinstance(particleState[k][kk], torch.Tensor):
+                    print(f'state[{k:24s}][{kk:18s}]: min: {particleState[k][kk].min():+.3e}, max: {particleState[k][kk].max():+.3e}, median: {particleState[k][kk].median():+.3e} [{particleState[k][kk].shape}\t@ {particleState[k][kk].device}\tx {particleState[k][kk].dtype}\t]')
+                else:
+                    print(f'state[{k:24s}][{kk:18s}]: {particleState[k][kk]}\t[{type(particleState[k][kk])}]')        
+        else:
+            print(f'state[{k:24s}]: {particleState[k]:10}\t[{type(particleState[k])}]')

@@ -1,5 +1,6 @@
 import inspect
 import diffSPH.v2.modules
+import diffSPH.v2.simulationSchemes
 class ModuleWrapper:
     def __init__(self, name, module):
         self.module = module

@@ -74,7 +74,7 @@ def computeViscosityXSPH(fluidState, config):
     alpha = config['diffusion']['artificial-constant']
 
     (i,j) = fluidState['fluidNeighborhood']['indices']
-    return alpha * sphOperationFluidState(fluidState, fluidState['fluidVelocities'][j] - fluidState['fluidVelocities'][i], 'interpolate') / config['integration']['dt']
+    return alpha * sphOperationFluidState(fluidState, fluidState['fluidVelocities'][j] - fluidState['fluidVelocities'][i], 'interpolate') / config['timestep']['dt']
     pass
 
 def computeViscosityNaive(fluidState, config):
@@ -197,9 +197,9 @@ def computeViscosity(fluidState, config):
 from diffSPH.parameter import Parameter
 def getParameters():
     return [
-        Parameter('diffusion', 'velocityScheme', str, 'deltaSPH', required = False,export = False, hint = 'Scheme for the velocity diffusion term'),
-        Parameter('diffusion', 'nu', float, 0.02, required = False,export = False, hint = 'Viscosity coefficient'),
-        Parameter('diffusion', 'alpha', float, 1.0, required = False,export = False, hint = 'Viscosity coefficient'),
+        Parameter('diffusion', 'velocityScheme', str, 'deltaSPH_inviscid', required = False,export = False, hint = 'Scheme for the velocity diffusion term'),
+        Parameter('diffusion', 'nu', float, 0.01, required = False,export = False, hint = 'Viscosity coefficient'),
+        Parameter('diffusion', 'alpha', float, 0.01, required = False,export = False, hint = 'Viscosity coefficient'),
         Parameter('diffusion', 'beta', float, 0.0, required = False,export = False, hint = 'Viscosity coefficient, used for high mach number shocks, should be 0 for low mach number flows'),
         Parameter('diffusion', 'pi-switch', bool, False, required = False,export = False, hint = 'Switches velocity diffusion off for separating particles'),
         Parameter('diffusion', 'artificial-constant', float, 0.02, required = False,export = False, hint = 'Artificial viscosity constant for XSPH'),

@@ -4,9 +4,11 @@ from typing import Union, List
 from diffSPH.kernels import getKernel
 from diffSPH.v2.sampling import optimizeArea
 from diffSPH.v2.math import volumeToSupport
+import numpy as np
 
 particleParameters = [
     Parameter('particle', 'nx', int, 64, required = False, export = True),
+    Parameter('particle', 'dx', float, -1.0, required = False, export = True),
 ]
 
 fluidParameters = [
@@ -29,18 +31,19 @@ computeParameters = [
 ]
 
 kernelParameters = [
-    Parameter('kernel', 'name', str, 'Wendland4', required = False, export = True),
-    Parameter('kernel', 'targetNeighbors', int, 50, required = False, export = True),
+    Parameter('kernel', 'name', str, 'Wendland2', required = False, export = True),
+    Parameter('kernel', 'targetNeighbors', int, -1, required = False, export = True),
+    # Parameter('kernel', 'function', torch.nn.Module, None, required = False, export = False),
 ]
 
 domainParameters = [
-    Parameter('domain', 'minExtent', Union[float, List[float]], -1, required = True, export = True),
-    Parameter('domain', 'maxExtent', Union[float, List[float]], 1, required = True, export = True),
-    Parameter('domain', 'dim', int, 2, required = False, export = True),
-    Parameter('domain', 'periodic', Union[float, List[bool]], True, required = False, export = True),
+    Parameter('domain', 'minExtent', Union[float, List[float]], -1, required = False, export = True),
+    Parameter('domain', 'maxExtent', Union[float, List[float]], 1, required = False, export = True),
+    Parameter('domain', 'dim', int, 2, required = False, export = False),
+    Parameter('domain', 'periodic', Union[float, List[bool]], False, required = False, export = True),
 ]
 
-defaultParameters = particleParameters + computeParameters + kernelParameters + domainParameters + integrationParameters + simulationParameters + fluidParameters
+defaultParameters = particleParameters + computeParameters + domainParameters + kernelParameters + integrationParameters + simulationParameters + fluidParameters
 
 def parseComputeInfo(config):
     device = config['compute']['device']
@@ -76,17 +79,33 @@ def parseDomainConfig(config: dict):
 def parseKernelConfig(config: dict):
     kernel = getKernel(config['kernel']['name'])
     targetNeighbors = config['kernel']['targetNeighbors']
-    return kernel, targetNeighbors
+    return kernel, targetNeighbors, kernel.kernelScale(config['domain']['dim'])
 
 def parseParticleConfig(config: dict):
     nx = config['particle']['nx']
 
     domainExtent = config['domain']['maxExtent'] - config['domain']['minExtent']
-    dx = domainExtent / nx
-    dx = torch.min(dx)
+    if config['particle']['dx'] < 0.:
+        dx = domainExtent / nx
+        dx = torch.min(dx)
+    else:
+        dx = torch.tensor(config['particle']['dx'], dtype = config['compute']['dtype'], device = config['compute']['device'])
     volume = dx**config['domain']['dim']
 
-    h = volumeToSupport(volume, config['kernel']['targetNeighbors'], config['domain']['dim'])
+    if config['kernel']['targetNeighbors'] == -1:
+        h = 2 * dx * config['kernel']['kernelScale']
+        if config['domain']['dim'] == 1:
+            numNeighbors = 2 * h / dx
+        elif config['domain']['dim'] == 2:
+            numNeighbors = np.pi * h**2 / dx**2
+        elif config['domain']['dim'] == 3:
+            numNeighbors = 4/3 * np.pi * h**3 / dx**3
+        config['kernel']['targetNeighbors'] = numNeighbors
+        config['particle']['support'] = h
+    else:
+        h = volumeToSupport(volume, config['kernel']['targetNeighbors'], config['domain']['dim'])
+        config['particle']['kernelScale'] = h / (2 * dx)
+
     if config['simulation']['correctArea']:
         optimizedVolume, *_ = optimizeArea(volume.item(), dx, volume.dtype, 'cpu', config['kernel']['targetNeighbors'], config['kernel']['function'], dim = config['domain']['dim'], thresh = 1e-7**2, maxIter = 64)
         optimizedSupport = volumeToSupport(optimizedVolume, config['kernel']['targetNeighbors'], config['domain']['dim'])
@@ -111,7 +130,7 @@ def parseDefaultParameters(config):
 
     config['compute']['device'], config['compute']['dtype'] = parseComputeInfo(config)
     config['domain']['minExtent'], config['domain']['maxExtent'], config['domain']['periodicity'] = parseDomainConfig(config)
-    config['kernel']['function'], config['kernel']['targetNeighbors'] = parseKernelConfig(config)
+    config['kernel']['function'], config['kernel']['targetNeighbors'], config['kernel']['kernelScale'] = parseKernelConfig(config)
     config['particle']['dx'], config['particle']['defaultVolume'], config['particle']['defaultSupport'], \
         config['particle']['volume'], config['particle']['support'] = parseParticleConfig(config)
     config['kernel']['kernelScale'] = config['particle']['support'] / (2 * config['particle']['dx'])

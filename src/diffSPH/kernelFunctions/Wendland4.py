@@ -41,3 +41,9 @@ def kernelLaplacian(rij, hij, dim : int = 2):
     return ((torch.where(rij > -1e-7, ((dim - 1) / (rij *hij + 1e-7 * hij)) * dkdq(rij + 1e-7, dim) * hij, 0) + d2kdq2(rij, dim)) * C_d(dim)) / hij**(dim + 2)
 
     # return (torch.where(rij > 1e-7, ((dim - 1) / (rij * hij + 1e-7 * hij)) * dkdq(rij + 1e-7, dim) * hij + d2kdq2(rij, dim), 0)) * C_d(dim) / hij**(dim + 2)
+
+@torch.jit.script # See Dehnen & Aly: Improving convergence in smoothed particle hydrodynamics simulations
+def kernelScale(dim: int = 2):
+    if dim == 1: return 1.936492
+    elif dim == 2: return 2.171239
+    else: return 2.207940

@@ -452,23 +452,24 @@ def solveShifting(particleState, config):
 from diffSPH.parameter import Parameter
 def getParameters():
     return [
-        Parameter('shifting', 'scheme', str, 'IPS', required = False,export = False, hint = 'Scheme for the density diffusion term (IPS, deltaPlus)'),
+        Parameter('shifting', 'scheme', str, 'deltaSPH', required = False,export = False, hint = 'Scheme for the density diffusion term (IPS, deltaPlus)'),
         Parameter('shifting', 'R', float, 0.25, required = False,export = False, hint = 'R parameter for the deltaPlus scheme'),
         Parameter('shifting', 'n', float, 4, required = False,export = False, hint = 'n parameter for the deltaPlus scheme'),
         Parameter('shifting', 'CFL', float, 1.5, required = False,export = False, hint = 'CFL parameter for the deltaPlus scheme'),
-        Parameter('shifting', 'computeMach', bool, False, required = False,export = False, hint = 'Compute Mach number for the deltaPlus scheme'),
+        Parameter('shifting', 'computeMach', bool, True, required = False,export = False, hint = 'Compute Mach number for the deltaPlus scheme'),
         Parameter('shifting', 'solver', str, 'BiCGStab_wJacobi', required = False, export = False, hint = 'Use BiCGStab for the IPS scheme'),
         Parameter('shifting', 'freeSurface', bool, False, required = False,export = False, hint = 'Use free surface detection for shifting scheme'),
         Parameter('shifting', 'normalScheme', str, 'lambda', required = False,export = False, hint = 'Scheme for normal computation (color, lambda, default)'),
         Parameter('shifting', 'projectionScheme', str, 'mat', required = False,export = False, hint = 'Scheme for normal projection (dot, M)'),
-        Parameter('shifting', 'threshold', float, 0.25, required = False,export = False, hint = 'Threshold for the shifting scheme'),
-        Parameter('shifting', 'surfaceScaling', float, 0.125, required = False,export = False, hint = 'Scaling for the surface projection'),
-        Parameter('shifting', 'maxIterations', int, 32, required = False,export = False, hint = 'Maximum number of iterations for the shifting scheme'),
-        Parameter('shifting', 'summationDensity', bool, True, required = False,export = False, hint = 'Use summation density for the shifting scheme'),
+        Parameter('shifting', 'threshold', float, 0.01, required = False,export = False, hint = 'Threshold for the shifting scheme'),
+        Parameter('shifting', 'surfaceScaling', float, 0.1, required = False,export = False, hint = 'Scaling for the surface projection'),
+        Parameter('shifting', 'maxIterations', int, 1, required = False,export = False, hint = 'Maximum number of iterations for the shifting scheme'),
+        Parameter('shifting', 'summationDensity', bool, False, required = False,export = False, hint = 'Use summation density for the shifting scheme'),
         Parameter('shifting', 'useExtendedMask', bool, False, required = False,export = False, hint = 'Use extended mask for the shifting scheme'),
-        Parameter('shifting', 'initialization', str, 'deltaPlus', required = False,export = False, hint = 'Initialization scheme for the shifting scheme (deltaPlus, random)'),
-        Parameter('shifting', 'maxSolveIter', int, 32, required = False,export = False, hint = 'Maximum number of iterations for the linear solver in the shifting scheme'),
-        Parameter('shifting', 'surfaceDetection', str, 'Maronne', required = False,export = False, hint = 'Surface detection scheme for the free surface (Maronne, colorGrad)'),
+        Parameter('shifting', 'initialization', str, 'zero', required = False,export = False, hint = 'Initialization scheme for the shifting scheme (deltaPlus, random)'),
+        Parameter('shifting', 'maxSolveIter', int, 64, required = False,export = False, hint = 'Maximum number of iterations for the linear solver in the shifting scheme'),
+        Parameter('shifting', 'surfaceDetection', str, 'Barcasco', required = False,export = False, hint = 'Surface detection scheme for the free surface (Maronne, colorGrad)'),
+        Parameter('shifting', 'active', bool, True, required = False,export = False, hint = 'Enable the shifting scheme')
     ]
 
 
