@@ -15,9 +15,15 @@ class ModuleWrapper:
     
 
 module_list = [(name, obj) for name, obj in inspect.getmembers(diffSPH.v2.modules) if inspect.ismodule(obj) and name != '__init__']
+scheme_list = [(name, obj) for name, obj in inspect.getmembers(diffSPH.v2.simulationSchemes) if inspect.ismodule(obj) and name != '__init__']
 modules = []
 
 for module_name, module in module_list:
     modules.append(ModuleWrapper(module_name, module))
+for module_name, module in scheme_list:
+    modules.append(ModuleWrapper(module_name, module))
+
+
+
 
 

@@ -4,7 +4,7 @@ from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrice
 
 from diffSPH.v2.math import mod
 
-def computeDensityDeltaTerm(fluidState, config):
+def computeGravity(fluidState, config):
     if not config['gravity']['active']:
         return torch.zeros_like(fluidState['fluidVelocities'])
 

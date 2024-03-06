@@ -16,7 +16,7 @@ from diffSPH.v2.modules.momentumEquation import computeMomentumEquation
 from diffSPH.v2.modules.viscosity import computeViscosity
 from diffSPH.v2.modules.pressureEOS import computeEOS
 from diffSPH.v2.modules.pressureForce import computePressureAccel
-from diffSPH.v2.modules.gravity import gravity
+from diffSPH.v2.modules.gravity import computeGravity
 
 def simulationStep(simulationState, config):
     simulationState['fluidNeighborhood'] = fluidNeighborSearch(simulationState, config)
@@ -28,8 +28,6 @@ def simulationStep(simulationState, config):
     
     simulationState['fluidDensityDiffusion'] = computeDensityDeltaTerm(simulationState, config)
     simulationState['fluidMomentumEquation'] = computeMomentumEquation(simulationState, config)
-
-
 
     simulationState['fluidVelocityDiffusion'] = computeViscosity(simulationState, config)
     simulationState['fluidPressures'] = computeEOS(simulationState, config)
@@ -46,10 +44,15 @@ def simulationStep(simulationState, config):
 
     simulationState['fluidDivergence'] = sphOperationFluidState(simulationState, (simulationState['fluidVelocities'], simulationState['fluidVelocities']), 'divergence')
 
-    simulationState['fluidGravityAccel'] = gravity(simulationState, config)
+    simulationState['fluidGravityAccel'] = computeGravity(simulationState, config)
 
-    dudt = simulationState['fluidPressureAccel'] + simulationState['fluidGravityAccel']
-    drhodt = simulationState['fluidMomentumEquation']
-    dudt += simulationState['fluidVelocityDiffusion']
-    drhodt += simulationState['fluidDensityDiffusion']
+    dudt = simulationState['fluidPressureAccel'] + simulationState['fluidGravityAccel'] + simulationState['fluidVelocityDiffusion']
+    drhodt = simulationState['fluidMomentumEquation'] + simulationState['fluidDensityDiffusion']
+    
     return simulationState['fluidVelocities'].clone(), dudt, drhodt
+
+from diffSPH.parameter import Parameter
+def getParameters():
+    return [
+        Parameter('deltaSPH', 'pressureSwitch', bool, False, required = False, export = True, hint = 'Switches the pressure force calculation to the Antuono Correction'),
+    ]
