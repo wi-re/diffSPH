@@ -108,7 +108,7 @@ def computeViscosityPrice2012(fluidState, config):
     pass
 def computeViscosityDeltaSPH_inviscid(fluidState, config):
     eps = config['diffusion']['eps']
-    alpha = config['diffusion']['nu']
+    alpha = config['diffusion']['alpha']
 
     (i,j) = fluidState['fluidNeighborhood']['indices']
     h_ij = fluidState['fluidNeighborhood']['supports']
@@ -123,7 +123,8 @@ def computeViscosityDeltaSPH_inviscid(fluidState, config):
 
     V_j = fluidState['fluidMasses'][j] / fluidState['fluidDensities'][j]
     kq = (V_j * pi_ij).view(-1,1) * fluidState['fluidNeighborhood']['gradients']
-    return (alpha * fluidState['fluidSupports'] / config['kernel']['kernelScale'] * config['fluid']['cs'] * config['fluid']['rho0'] / fluidState['fluidDensities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = fluidState['numParticles'])
+    return (alpha * fluidState['fluidSupports'] * config['fluid']['cs'] * config['fluid']['rho0'] / fluidState['fluidDensities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = fluidState['numParticles'])
+    # return (alpha * fluidState['fluidSupports'] * config['fluid']['cs'] * config['fluid']['rho0'] / fluidState['fluidDensities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = fluidState['numParticles'])
 
 
     pass
@@ -195,6 +196,12 @@ def computeViscosity(fluidState, config):
         raise ValueError('Unknown velocity diffusion scheme')
 
 from diffSPH.parameter import Parameter
+
+def computeViscosityParameter(particleState, config):      
+    nu_sph = config['diffusion']['alpha'] * config['fluid']['cs'] * config['particle']['support']  / (2 * (config['domain']['dim'] + 2)) * 5/4
+    nu_sph = config['diffusion']['nu'] if config['diffusion']['velocityScheme'] == 'deltaSPH_viscid' else nu_sph
+    return nu_sph
+
 def getParameters():
     return [
         Parameter('diffusion', 'velocityScheme', str, 'deltaSPH_inviscid', required = False,export = False, hint = 'Scheme for the velocity diffusion term'),
