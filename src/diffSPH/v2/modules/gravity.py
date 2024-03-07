@@ -16,12 +16,12 @@ def computeGravity(fluidState, config):
 
         center = torch.tensor(config['gravity']['potentialOrigin'], dtype = x.dtype, device = x.device)[:x.shape[-1]]
 
-        xij = torch.stack([x[:,i] - center if not periodic_i else mod(x[:,i] - center, minD[i], maxD[i]) for i, periodic_i in enumerate(periodicity)], dim = -1)
+        xij = torch.stack([x[:,i] - center[i] if not periodic_i else mod(x[:,i] - center[i], minD[i], maxD[i]) for i, periodic_i in enumerate(periodicity)], dim = -1)
         rij = torch.linalg.norm(xij, dim = -1)
         xij[rij > 1e-7] = xij[rij > 1e-7] / rij[rij > 1e-7, None]
 
         magnitude = config['gravity']['magnitude']
-        return -0.5 * magnitude**2 * xij * (rij)[:,None]**2
+        return - magnitude**2 * xij * (rij)[:,None] #/ fluidState['fluidDensities'][:,None]
     else:
         v = fluidState['fluidVelocities']
         direction = torch.tensor(config['gravity']['direction'], dtype = fluidState['fluidPositions'].dtype, device = fluidState['fluidPositions'].device)
