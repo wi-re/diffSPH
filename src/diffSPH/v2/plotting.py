@@ -225,7 +225,7 @@ def prepVisualizationState(perennialState, config, nGrid = 128):
     else:
         visualizationState['fluidPositions'] = x  
 
-    nGrid = 128
+    # nGrid = 128
     xGrid = torch.linspace(config['domain']['minExtent'][0], config['domain']['maxExtent'][0], nGrid, dtype = perennialState['fluidPositions'].dtype, device = perennialState['fluidPositions'].device)
     yGrid = torch.linspace(config['domain']['minExtent'][1], config['domain']['maxExtent'][1], nGrid, dtype = perennialState['fluidPositions'].dtype, device = perennialState['fluidPositions'].device)
     X, Y = torch.meshgrid(xGrid, yGrid, indexing = 'xy')
@@ -389,3 +389,112 @@ def updatePlot(plotState, visualizationState, inputQuantity):
         sc.set_norm(norm)
         # sc = axis.pcolormesh(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), gridDensity.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), cmap = cmap, norm = norm)
     
+
+from diffSPH.v2.plotting import mapToGrid
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import seaborn as sns
+import scipy.stats as stats
+from scipy.signal import find_peaks_cwt
+import numpy as np
+
+def computePSD(perennialState, grid_umag, config, nGrid = 255):
+
+    visualizationState = prepVisualizationState(perennialState, config, nGrid = 255)
+    X = visualizationState['X']
+    Y = visualizationState['Y']
+
+    grid_ux = mapToGrid(visualizationState, grid_umag).reshape(X.shape)
+    # grid_uy = mapToGrid(visualizationState, perennialState['fluidVelocities'][:,1]).reshape(X.shape)
+    # grid_umag = (grid_ux**2 + grid_uy**2)
+
+    data = grid_ux.detach().cpu().numpy()
+
+    # Normalize your grid data to span -1 to 1
+    grid_umag_normalized = 2 * (data - np.min(data)) / np.ptp(data) - 1
+
+    # Compute the 2D FFT
+    fft_grid_umag = np.fft.fft2(grid_umag_normalized)
+
+    # Shift the zero frequency component to the center of the spectrum
+    fft_shifted = np.fft.fftshift(fft_grid_umag)
+
+    # Get the frequencies for the x and y axis
+    freqs_x = np.fft.fftshift(np.fft.fftfreq(data.shape[0]))
+    freqs_y = np.fft.fftshift(np.fft.fftfreq(data.shape[1]))
+
+    delta_x = (config['domain']['maxExtent'] - config['domain']['minExtent']).detach().cpu().numpy()[0] / data.shape[0]
+    delta_y = (config['domain']['maxExtent'] - config['domain']['minExtent']).detach().cpu().numpy()[0] / data.shape[1]
+    physical_freqs_x = freqs_x / delta_x
+    physical_freqs_y = freqs_y / delta_y
+
+    # Create a grid of frequencies
+    freqs_xx, freqs_yy = np.meshgrid(freqs_x, freqs_y, indexing = 'xy')
+    physical_freqs_xx, physical_freqs_yy = np.meshgrid(physical_freqs_x, physical_freqs_y, indexing = 'xy')
+
+    # Get the magnitude of the FFT
+    fft_mag = np.abs(fft_shifted)
+
+    knrm = np.sqrt(physical_freqs_xx**2 + physical_freqs_yy**2)
+    fourier_amplitudes = np.abs(fft_mag)**2
+
+    knrm = knrm.flatten()
+    fourier_amplitudes = fourier_amplitudes.flatten()
+
+    # print(knrm.shape, fourier_amplitudes.shape)
+
+    kbins = np.linspace(knrm.min(), knrm.max(), fft_mag.shape[0]//2)
+    kvals = 0.5 * (kbins[1:] + kbins[:-1])
+    Abins, _, _ = stats.binned_statistic(knrm, fourier_amplitudes,
+                                        statistic = "mean",
+                                        bins = kbins)
+    # Abins *= np.pi * (kbins[1:]**2 - kbins[:-1]**2)
+
+    # print(Abins.shape)
+    peaks = find_peaks_cwt(Abins, np.arange(1, 10))
+    return visualizationState, physical_freqs_xx, physical_freqs_yy, fft_mag, kvals, Abins, peaks
+
+
+    fig, axis = plt.subplots(1,1, figsize = (6,6))
+    axis.loglog(kvals, Abins)
+    axis.set_xlabel("$k$")
+    axis.set_ylabel("$P(k)$")
+    axis.axvline(kvals[np.argmax(Abins)], c = 'black', linestyle = '-')
+
+    print(peaks)
+    # Get the seaborn color palette
+    color_palette = sns.color_palette()
+
+
+
+    fig, axis = plt.subplots(1,1, figsize = (6,6))
+    axis.loglog(kvals, Abins)
+    axis.set_xlabel("$k$")
+    axis.set_ylabel("$P(k)$")
+    # axis.axvline(kvals[np.argmax(Abins)], c = 'black', linestyle = '-')
+    # axis.text(kvals[np.argmax(Abins)], 0.5*10**-5, f'k = {kvals[np.argmax(Abins)]:.2f}', ha = 'right', va = 'bottom', rotation = 90)
+
+    for i, peak in enumerate(peaks):
+        axis.axvline(kvals[peak ], c = color_palette[i], linestyle = '--')
+        axis.text(kvals[peak ], 0.5*10**-5, f'k = {kvals[peak]:.2f}', ha = 'right', va = 'bottom', rotation = 90, c = color_palette[i])
+
+    axis.text(kvals[np.argmax(Abins)], 0.5*10**-5, f'k = {kvals[np.argmax(Abins)]:.2f}', ha = 'right', va = 'bottom', rotation = 90)
+
+    fig.tight_layout()
+
+def plotFFT(fig, axis, fx, fy, fft_data):
+    logData = np.log(fft_data)
+    im = axis.pcolormesh(fx, fy, logData, shading='auto', vmin = -np.max(np.abs(logData)), vmax = np.max(np.abs(logData)), cmap = 'Spectral_r')
+    axis.set_xlabel('Frequency (x)')
+    axis.set_ylabel('Frequency (y)')
+    axis.set_title('FFT Magnitude')
+    cax = make_axes_locatable(axis).append_axes("right", size="5%", pad=0.05)
+    fig.colorbar(im, cax=cax)
+def plotPSD(fig, axis, kvals, Abins, peaks = None):
+    axis.loglog(kvals, Abins)
+    axis.set_xlabel("$k$")
+    axis.set_ylabel("$P(k)$")
+    if peaks is not None:
+        color_palette = sns.color_palette()
+        for i, peak in enumerate(peaks):
+            axis.axvline(kvals[peak ], c = color_palette[i], linestyle = '--')
+            axis.text(kvals[peak ], 0.5*10**-5, f'k = {kvals[peak]:.2f}', ha = 'right', va = 'bottom', rotation = 90, c = color_palette[i])

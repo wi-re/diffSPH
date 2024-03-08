@@ -85,3 +85,5 @@ test.csv
 *egg
 *.egg*
 *.whl
+
+generative/**/*.gif

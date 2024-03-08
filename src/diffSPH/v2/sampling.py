@@ -506,16 +506,18 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = []):
     # noiseState['fluidDensities'] = particlesA.new_ones(particlesA.shape[0]) * config['fluid']['rho0'] #sphOperationFluidState(noiseState, None, 'density')
     # _, noiseState['fluidNumNeighbors'] = countUniqueEntries(noiseState['fluidNeighborhood']['indices'][0], noiseState['fluidPositions'])
 
+
+    fluidNeighborhood = fluidNeighborSearch(noiseState, config)
+    noiseState['fluidNeighborhood'] = fluidNeighborhood
     for sdf in sdfs:
         noiseState['fluidPotential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree')
     noiseState['fluidVelocities'], noiseState['fluidDivergence'] = sampleVelocityField(noiseState)
     mask = torch.ones_like(noiseState['fluidPotential'], dtype = torch.bool)
     for sdf_func in sdfs:
-        _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), h, -1e-4)
+        _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
         mask = mask & maskA
     noiseState['fluidVelocities'][~mask, :] = 0
 
-    fluidNeighborhood = fluidNeighborSearch(noiseState, config)
     _, noiseState['fluidNumNeighbors'] = countUniqueEntries(fluidNeighborhood['indices'][0], noiseState['fluidPositions'])
 
     return noiseState, mask
