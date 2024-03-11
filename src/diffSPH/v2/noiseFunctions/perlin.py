@@ -69,6 +69,7 @@ def perlinNoise2D(shape, res, tileable=(False, False), interpolant=interpolant, 
     d = (shape[0] // res[0], shape[1] // res[1])
     grid = torch.stack(torch.meshgrid(torch.arange(0, res[0],delta[0]), torch.arange(0,res[1], delta[1]), indexing = 'xy'),axis=-1).transpose(0,1) % 1
     # Gradients
+    print('perlinNoise2D', shape, res, tileable, interpolant, rng, device, dtype)
     angles = 2*np.pi*rng.random((res[0]+1, res[1]+1))
     gradients = np.dstack((np.cos(angles), np.sin(angles)))
     if tileable[0]:

@@ -1,4 +1,5 @@
 import torch
+from torch.profiler import record_function
 
 
 def stiffTaitEOS(simulationState, config):
@@ -46,7 +47,7 @@ def murnaghanEOS(simulationState, config):
 
 from torch.profiler import record_function
 def computeEOS(simulationState, config):
-    with record_function("EOS"):
+    with record_function("[SPH] - Equation of State"):
         if config['EOS']['type'] == 'stiffTait':
             return stiffTaitEOS(simulationState, config)
         elif config['EOS']['type'] == 'Tait':

@@ -408,7 +408,7 @@ def sampleNoise(noiseConfig):
     if 'persistence' not in noiseConfig:
         noiseConfig['persistence'] = 0.5
     if 'lacunarity' not in noiseConfig:
-        noiseConfig['lacunarity'] = 2.0
+        noiseConfig['lacunarity'] = 2
     if 'seed' not in noiseConfig:
         noiseConfig['seed'] = 234675
     if 'tileable' not in noiseConfig:

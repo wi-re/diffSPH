@@ -87,3 +87,4 @@ test.csv
 *.whl
 
 generative/**/*.gif
+notebooks/**/*.gif

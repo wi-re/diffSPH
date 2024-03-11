@@ -8,12 +8,12 @@ from diffSPH.v2.math import scatter_sum
 from torch.profiler import record_function
 
 def computePressureAccel(simulationState, config):
-    with record_function("PressureAccel"):
+    with record_function("[SPH] - Fluid Pressure Acceleration (1/rho nabla p)"):
         return -sphOperationFluidState(simulationState, (simulationState['fluidPressures'], simulationState['fluidPressures']), operation = 'gradient', gradientMode='summation') / simulationState['fluidDensities'].view(-1,1)
     
 
 def computePressureAccelSwitch(simulationState, config):
-    with record_function("PressureAccel"):
+    with record_function("[SPH] - Fluid Pressure Acceleration (1/rho nabla p) [Antuono Switch]"):
         (i,j) = simulationState['fluidNeighborhood']['indices']
         p_i = simulationState['fluidPressures'][i]
         p_j = simulationState['fluidPressures'][j]

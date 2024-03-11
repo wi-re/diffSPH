@@ -496,5 +496,5 @@ def plotPSD(fig, axis, kvals, Abins, peaks = None):
     if peaks is not None:
         color_palette = sns.color_palette()
         for i, peak in enumerate(peaks):
-            axis.axvline(kvals[peak ], c = color_palette[i], linestyle = '--')
-            axis.text(kvals[peak ], 0.5*10**-5, f'k = {kvals[peak]:.2f}', ha = 'right', va = 'bottom', rotation = 90, c = color_palette[i])
+            axis.axvline(kvals[peak ], c = color_palette[i % len(color_palette)], linestyle = '--')
+            axis.text(kvals[peak ], 0.5*10**-5, f'k = {kvals[peak]:.2f}', ha = 'right', va = 'bottom', rotation = 90, c = color_palette[i% len(color_palette)])
