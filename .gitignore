@@ -85,6 +85,8 @@ test.csv
 *egg
 *.egg*
 *.whl
+*.mp4
+palette.png
 
 generative/**/*.gif
 notebooks/**/*.gif

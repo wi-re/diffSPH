@@ -43,7 +43,55 @@ domainParameters = [
     Parameter('domain', 'periodic', Union[float, List[bool]], False, required = False, export = True),
 ]
 
-defaultParameters = particleParameters + computeParameters + domainParameters + kernelParameters + integrationParameters + simulationParameters + fluidParameters
+import random
+noiseParameters = [
+    Parameter('noise', 'n', int, 64, required = False, export = True),
+    Parameter('noise', 'baseFrequency', float, 1, required = False, export = True),
+    Parameter('noise', 'dim', int, 2, required = False, export = True),
+    Parameter('noise', 'octaves', int, 4, required = False, export = True),
+    Parameter('noise', 'persistence', float, 0.5, required = False, export = True),
+    Parameter('noise', 'lacunarity', float, 2, required = False, export = True),
+    Parameter('noise', 'seed', int, random.randint(0,77777777), required = False, export = True),
+    Parameter('noise', 'tileable', bool, True, required = False, export = True),
+    Parameter('noise', 'kind', str, 'simplex', required = False, export = True),
+]
+
+plotStateDict = [
+    Parameter('', 'val', str, 'fluidIndex', required = False, export = True, hint='Value to plot'),
+    Parameter('', 'cbar', bool, True, required = False, export = True, hint='Colorbar'),
+    Parameter('', 'cmap', str, 'twilight', required = False, export = True, hint='Colormap'),
+    Parameter('', 'scale', str, 'lin', required = False, export = True, hint='Scale'),
+    Parameter('', 'size', int, 5, required = False, export = True, hint='Size'),
+    Parameter('', 'gridVis', bool, False, required = False, export = True, hint='Grid Mapping'),
+    Parameter('', 'title', str, 'Fluid Index', required = False, export = True, hint='Title'),
+    Parameter('', 'midPoint', float, 0, required = False, export = True, hint='Midpoint'),
+    Parameter('', 'mapping', str, '.x', required = False, export = True, hint='Mapping'),
+]
+
+plotParameters = [
+    Parameter('plot', 'mosaic', str, 'A', required = False, export = True, hint='Mosaic plot layout'),
+    Parameter('plot', 'figSize', List[float], [6,5.5], required = False, export = True, hint='Figure size'),
+    Parameter('plot', 'export', bool, True, required = False, export = True, hint='Export plots'),
+    Parameter('plot', 'updateInterval', int, 32, required = False, export = True, hint='Export interval'),
+    Parameter('plot', 'namingScheme', str, 'timestep', required = False, export = True, hint='Naming scheme'),
+    Parameter('plot', 'exportPath', str, 'output', required = False, export = True, hint='Export path'),
+    Parameter('plot', 'gif', bool, True, required = False, export = True, hint='Export gif'),
+    Parameter('plot', 'namingScheme', str, 'timestep', required = False, export = True, hint='Naming scheme'),
+    Parameter('plot', 'plots', dict, {'A': {'val': 'fluidIndex', 'cbar': True, 'cmap': 'twilight', 'scale': 'lin', 'size': 5, 'gridVis' : False, 'title': 'Fluid Index'}},required = False, export = True, hint='Plots'),
+    Parameter('plot', 'gifScale', int, 640, required = False, export = True, hint='Gif Output Size'),
+    Parameter('plot', 'fps', float, -1, required = False, export = True, hint='Export FPS'),
+    Parameter('plot', 'exportFPS', float, 30, required = False, export = True, hint='Export FPS'),
+
+]
+
+exportParameters = [
+    Parameter('export', 'active', bool, True, required = False, export = True, hint='Export data'),
+    Parameter('export', 'exportPath', str, 'export', required = False, export = True, hint='Export path'),
+    Parameter('export', 'namingScheme', str, 'timestep', required = False, export = True, hint='Naming scheme'),
+    Parameter('export', 'interval', int, 1, required = False, export = True, hint='Export interval'),
+]
+
+defaultParameters = particleParameters + computeParameters + domainParameters + kernelParameters + integrationParameters + simulationParameters + fluidParameters + plotParameters + exportParameters + noiseParameters
 
 def parseComputeInfo(config):
     device = config['compute']['device']
@@ -81,6 +129,7 @@ def parseKernelConfig(config: dict):
     targetNeighbors = config['kernel']['targetNeighbors']
     return kernel, targetNeighbors, kernel.kernelScale(config['domain']['dim'])
 
+import datetime
 def parseParticleConfig(config: dict):
     nx = config['particle']['nx']
 
@@ -135,15 +184,23 @@ def parseDefaultParameters(config):
         config['particle']['volume'], config['particle']['support'] = parseParticleConfig(config)
     config['kernel']['kernelScale'] = config['particle']['support'] / (2 * config['particle']['dx'])
     config['particle']['smoothingLength'] = 2 * config['particle']['dx']
+    config['noise']['n'] = config['particle']['nx']
+
+    for plot in config['plot']['plots']:
+        for parameter in plotStateDict:
+            parameter.parseConfig(config['plot']['plots'][plot])
+
+    config['simulation']['timestamp'] = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
     return config
     # print(config)
     
 
-
+from diffSPH.v2.modules.viscosity import computeViscosityParameter
 from diffSPH.v2.moduleWrapper import modules
 def parseModuleParameters(config):
     for module in modules:
         params = module.getParameters()
         for param in params:
             param.parseConfig(config)
+    config['diffusion']['nu_sph'] = computeViscosityParameter(None, config)
     return config

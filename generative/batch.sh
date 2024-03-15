@@ -1,0 +1,16 @@
+python tgv_sps.py --baseFrequency 1 --octaves 1 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 1 --octaves 2 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 1 --octaves 3 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 1 --octaves 4 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 2 --octaves 1 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 2 --octaves 2 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 2 --octaves 3 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 2 --octaves 4 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 4 --octaves 1 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 4 --octaves 2 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 4 --octaves 3 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 4 --octaves 4 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 8 --octaves 1 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 8 --octaves 2 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 8 --octaves 3 --seed 12968534 --Re 4000 --nx 256
+python tgv_sps.py --baseFrequency 8 --octaves 4 --seed 12968534 --Re 4000 --nx 256

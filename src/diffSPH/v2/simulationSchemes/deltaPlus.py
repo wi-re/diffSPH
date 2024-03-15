@@ -17,6 +17,7 @@ from diffSPH.v2.modules.viscosity import computeViscosity
 from diffSPH.v2.modules.pressureEOS import computeEOS
 from diffSPH.v2.modules.pressureForce import computePressureAccel
 from diffSPH.v2.modules.gravity import computeGravity
+from diffSPH.v2.modules.sps import computeSPSTurbulence
 from torch.profiler import record_function
 
 def simulationStep(simulationState, config):
@@ -52,8 +53,12 @@ def simulationStep(simulationState, config):
             simulationState['fluidDivergence'] = sphOperationFluidState(simulationState, (simulationState['fluidVelocities'], simulationState['fluidVelocities']), 'divergence')
         with record_function("[SPH] - deltaSPH (6 - Gravity)"):
             simulationState['fluidGravityAccel'] = computeGravity(simulationState, config)
+        if config['SPS']['active']:
+            with record_function("[SPH] - deltaSPH (7 - SPS Turbulence)"):
+                simulationState['fluidSPSTurbulence'] = computeSPSTurbulence(simulationState, config)
+                simulationState['fluidVelocityDiffusion'] += simulationState['fluidSPSTurbulence']
 
-        with record_function("[SPH] - deltaSPH (7 - Update)"):
+        with record_function("[SPH] - deltaSPH (8 - Update)"):
             dudt = simulationState['fluidPressureAccel'] + simulationState['fluidGravityAccel'] + simulationState['fluidVelocityDiffusion']
             drhodt = simulationState['fluidMomentumEquation'] + simulationState['fluidDensityDiffusion']
             

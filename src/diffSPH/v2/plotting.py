@@ -202,11 +202,11 @@ from diffSPH.kernels import getKernel
 from diffSPH.v2.sphOps import sphOperationFluidState, sphOperation
 import copy
 
-def prepVisualizationState(perennialState, config, nGrid = 128):
+def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhood = True, grid = True):
     visualizationState = copy.deepcopy(perennialState)
-
-    visualizationState['fluidNeighborhood'] = fluidNeighborSearch(visualizationState, config)
-    visualizationState['fluidDensities'] = sphOperationFluidState(visualizationState, None, 'density')
+    if fluidNeighborhood:
+        visualizationState['fluidNeighborhood'] = fluidNeighborSearch(visualizationState, config)
+        visualizationState['fluidDensities'] = sphOperationFluidState(visualizationState, None, 'density')
     visualizationState['fluidMasses'] = perennialState['fluidMasses']
 
     visualizationState['fluidVelocities'] = perennialState['fluidVelocities']
@@ -230,19 +230,19 @@ def prepVisualizationState(perennialState, config, nGrid = 128):
     yGrid = torch.linspace(config['domain']['minExtent'][1], config['domain']['maxExtent'][1], nGrid, dtype = perennialState['fluidPositions'].dtype, device = perennialState['fluidPositions'].device)
     X, Y = torch.meshgrid(xGrid, yGrid, indexing = 'xy')
     P = torch.stack([X,Y], dim=-1).flatten(0,1)
-
-    visualizationState['grid'] = P
-    visualizationState['X'] = X
-    visualizationState['Y'] = Y
-    visualizationState['nGrid'] = nGrid
-    i, j, rij, xij, hij, Wij, gradWij = neighborSearch(visualizationState['grid'], visualizationState['fluidPositions'], 0, perennialState['fluidSupports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
-    visualizationState['gridNeighborhood'] = {}
-    visualizationState['gridNeighborhood']['indices'] = (i, j)
-    visualizationState['gridNeighborhood']['distances'] = rij
-    visualizationState['gridNeighborhood']['vectors'] = xij
-    visualizationState['gridNeighborhood']['kernels'] = Wij
-    visualizationState['gridNeighborhood']['gradients'] = gradWij
-    visualizationState['gridNeighborhood']['supports'] = hij
+    if grid:
+        visualizationState['grid'] = P
+        visualizationState['X'] = X
+        visualizationState['Y'] = Y
+        visualizationState['nGrid'] = nGrid
+        i, j, rij, xij, hij, Wij, gradWij = neighborSearch(visualizationState['grid'], visualizationState['fluidPositions'], 0, perennialState['fluidSupports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
+        visualizationState['gridNeighborhood'] = {}
+        visualizationState['gridNeighborhood']['indices'] = (i, j)
+        visualizationState['gridNeighborhood']['distances'] = rij
+        visualizationState['gridNeighborhood']['vectors'] = xij
+        visualizationState['gridNeighborhood']['kernels'] = Wij
+        visualizationState['gridNeighborhood']['gradients'] = gradWij
+        visualizationState['gridNeighborhood']['supports'] = hij
 
     return visualizationState
 
@@ -498,3 +498,68 @@ def plotPSD(fig, axis, kvals, Abins, peaks = None):
         for i, peak in enumerate(peaks):
             axis.axvline(kvals[peak ], c = color_palette[i % len(color_palette)], linestyle = '--')
             axis.text(kvals[peak ], 0.5*10**-5, f'k = {kvals[peak]:.2f}', ha = 'right', va = 'bottom', rotation = 90, c = color_palette[i% len(color_palette)])
+
+
+from diffSPH.v2.plotting import computePSD, plotFFT, plotPSD, mapToGrid
+from diffSPH.v2.sphOps import sphOperationFluidState
+# from diffSPH.v2.plotting import updatePlot, visualizeParticles, prepVisualizationState
+import os
+
+def setupInitialPlot(perennialState, particleState, config):
+    fig, axis = plt.subplot_mosaic(config['plot']['mosaic'], figsize=config['plot']['figSize'], sharex = False, sharey = False)
+
+    visualizationState = prepVisualizationState(perennialState, config)
+
+    plotStates = {}
+
+    for plot in config['plot']['plots']:
+        axis[plot].set_title(config['plot']['plots'][plot]['title'])
+        plotStates[plot] = visualizeParticles(fig, axis[plot], config, visualizationState, perennialState[config['plot']['plots'][plot]['val']], cbar = config['plot']['plots'][plot]['cbar'], cmap = config['plot']['plots'][plot]['cmap'], scaling = config['plot']['plots'][plot]['scale'], midPoint = config['plot']['plots'][plot]['midPoint'], gridVisualization= config['plot']['plots'][plot]['gridVis'], s = config['plot']['plots'][plot]['size'], mapping = config['plot']['plots'][plot]['mapping'])
+
+    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['E_k']:.4g} ({(perennialState['E_k'] - particleState['E_k'])/particleState['E_k']:.2%})''')
+    fig.tight_layout()
+    
+
+    return fig, axis, plotStates
+
+def exportPlot(perennialState, config, fig):
+    if config['plot']['namingScheme'] == 'timestep':
+        outFolder = f'{config["plot"]["exportPath"]}/{config["simulation"]["timestamp"]}/'
+    else:
+        outFolder = f'{config["plot"]["exportPath"]}/{config["plot"]["namingScheme"]}/'
+    os.makedirs(outFolder, exist_ok = True)
+    fig.savefig(outFolder + 'frame_{:05d}.png'.format(perennialState["timestep"]), dpi = 300)
+
+def updatePlots(perennialState, particleState, config, plotStates, fig, axis):
+    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['E_k']:.4g} ({(perennialState['E_k'] - particleState['E_k'])/particleState['E_k']:.2%})''')
+
+    visualizationState = prepVisualizationState(perennialState, config)
+    for plot in config['plot']['plots']:
+        updatePlot(plotStates[plot], visualizationState, perennialState[config['plot']['plots'][plot]['val']])
+
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+    if config['plot']['export']:
+        exportPlot(perennialState, config, fig)
+
+import subprocess
+import shlex
+def postProcessPlot(config):
+    if config['plot']['gif'] and config['plot']['export']:
+        
+        outFile = config['plot']['namingScheme'] if config['plot']['namingScheme'] != 'timestep' else config["simulation"]["timestamp"]
+        if config['plot']['namingScheme'] == 'timestep':
+            outFolder = f'{config["plot"]["exportPath"]}/{config["simulation"]["timestamp"]}/'
+        else:
+            outFolder = f'{config["plot"]["exportPath"]}/{config["plot"]["namingScheme"]}/'
+
+        os.makedirs(outFolder, exist_ok = True)
+        # print('Creating video from  frames (frame count: {})'.format(len(os.listdir(outFolder))))
+        command = '/usr/bin/ffmpeg -loglevel warning -y -framerate 30 -f image2 -pattern_type glob -i '+ outFolder + '*.png -c:v libx264 -b:v 20M -r ' + str(config['plot']['exportFPS']) + ' ' + outFolder + 'output.mp4'
+        commandB = f'ffmpeg -loglevel warning -hide_banner -y -i {outFolder}output.mp4 -vf "fps={config["plot"]["exportFPS"]},scale={config["plot"]["gifScale"]}:-1:flags=lanczos,palettegen" output/palette.png'
+        commandC = f'ffmpeg -loglevel warning -hide_banner -y -i {outFolder}output.mp4 -i output/palette.png -filter_complex "fps={config["plot"]["exportFPS"]},scale={config["plot"]["gifScale"]}:-1:flags=lanczos[x];[x][1:v]paletteuse" {outFile}.gif'
+
+        subprocess.run(shlex.split(command))
+        subprocess.run(shlex.split(commandB))
+        subprocess.run(shlex.split(commandC))
+        # print('Done')

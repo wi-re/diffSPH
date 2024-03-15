@@ -140,13 +140,17 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
             # sync perennialState with tempState   
             for k in perennialState.keys():
                 if k not in ['fluidVelocities', 'fluidPositions', 'fluidDensities']:
+                    temp = perennialState[k]
                     perennialState[k] = tempState[k]
+                    tempState[k] = temp
             if dxdt is not None:
                 perennialState['fluid_dxdt'] = dxdt 
             if dudt is not None:
                 perennialState['fluid_dudt'] = dudt 
             if drhodt is not None:
                 perennialState['fluid_drhodt'] = drhodt 
+            if 'fluidNeighborhood' in tempState:
+                del tempState['fluidNeighborhood']
 
         return perennialState, tempState, dxdt, dudt, drhodt
 

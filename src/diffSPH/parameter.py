@@ -14,6 +14,13 @@ class Parameter():
         return 'Parameter [%s.%s], required? %s, exported? %s, description: %s' % (self.namespace, self.name, 'yes' if self.required else 'no', 'yes' if self.export else 'no', self.hint)
 
     def parseConfig(self, config):
+        if self.namespace == '':
+            if self.required and self.name not in config:
+                raise Exception('Required parameter %s is missing' % self.name)
+            elif self.name not in config:
+                config[self.name] = self.defaultValue
+            return
+
         if self.required and self.namespace not in config:
             raise Exception('Parameter Namespace %s missing for required parameter %s.%s' % (self.namespace, self.namespace, self.name))
         elif self.namespace not in config:

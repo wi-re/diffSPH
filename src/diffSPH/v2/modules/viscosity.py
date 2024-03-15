@@ -209,6 +209,8 @@ def computeViscosityParameter(particleState, config):
     nu_sph = config['diffusion']['nu'] if config['diffusion']['velocityScheme'] == 'deltaSPH_viscid' else nu_sph
     return nu_sph
 
+
+
 def getParameters():
     return [
         Parameter('diffusion', 'velocityScheme', str, 'deltaSPH_inviscid', required = False,export = False, hint = 'Scheme for the velocity diffusion term'),
