@@ -104,23 +104,23 @@ def neighborSearchVerlet(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, per
             pos_x = torch.stack([x[:,i] if not periodic_i else torch.remainder(x[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
             pos_y = torch.stack([y[:,i] if not periodic_i else torch.remainder(y[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
             
-        
-        with record_function("NeighborSearch [radiusSearch]"):
-            if isinstance(hx, float) and (hy is None or isinstance(hy, float)):
-                if mode == 'gather':
-                    fixedSupport = hx
-                elif mode == 'scatter':
-                    fixedSupport = hy
+        with torch.no_grad():
+            with record_function("NeighborSearch [radiusSearch]"):
+                if isinstance(hx, float) and (hy is None or isinstance(hy, float)):
+                    if mode == 'gather':
+                        fixedSupport = hx
+                    elif mode == 'scatter':
+                        fixedSupport = hy
+                    else:
+                        fixedSupport = (hx + hy)/2
+                    i, j = radiusSearch(pos_x, pos_y, support = None,
+                                        fixedSupport = torch.tensor(fixedSupport, dtype= torch.float32, device=x.device), 
+                                        periodicity = periodicity, domainMin = minD, domainMax = maxD, mode = mode, algorithm = algorithm)
                 else:
-                    fixedSupport = (hx + hy)/2
-                i, j = radiusSearch(pos_x, pos_y, support = None,
-                                    fixedSupport = torch.tensor(fixedSupport, dtype= torch.float32, device=x.device), 
+                    i, j = radiusSearch(pos_x, pos_y, 
+                                    support = (hx if isinstance(hx, torch.Tensor) else torch.ones(x.shape[0]).to(x.device).to(x.dtype) * hx, hy if isinstance(hy, torch.Tensor) else torch.ones(y.shape[0]).to(y.device).to(y.dtype) * hy), fixedSupport = None,
                                     periodicity = periodicity, domainMin = minD, domainMax = maxD, mode = mode, algorithm = algorithm)
-            else:
-                i, j = radiusSearch(pos_x, pos_y, 
-                                support = (hx if isinstance(hx, torch.Tensor) else torch.ones(x.shape[0]).to(x.device).to(x.dtype) * hx, hy if isinstance(hy, torch.Tensor) else torch.ones(y.shape[0]).to(y.device).to(y.dtype) * hy), fixedSupport = None,
-                                periodicity = periodicity, domainMin = minD, domainMax = maxD, mode = mode, algorithm = algorithm)
-        
+            
         with record_function("NeighborSearch [compute Support]"):
             if mode == 'gather':
                 hij = hx[i] if isinstance(hx, torch.Tensor) else torch.ones(i.shape[0]).to(x.device).to(x.dtype) * hx
@@ -209,18 +209,18 @@ def neighborSearchVerlet(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, per
 
 
 from torch.profiler import record_function
-def fluidNeighborSearch(simulationState: dict, config: dict):
+def fluidNeighborSearch(simulationState: dict, config: dict, computeKernels = True):
     if 'fluidNeighborhood' in simulationState:
         # print('Using prior neighborhood')
-        return evalNeighborhood(*simulationState['fluidNeighborhood']['fullIndices'], simulationState['fluidNeighborhood']['fullSupports'], simulationState, config)
+        return evalNeighborhood(*simulationState['fluidNeighborhood']['fullIndices'], simulationState['fluidNeighborhood']['fullSupports'], simulationState, config, computeKernels = computeKernels)
     
     i, j, hij = neighborSearchVerlet(simulationState['fluidPositions'], simulationState['fluidPositions'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
 
-    neighborDict = evalNeighborhood(i, j, hij, simulationState, config)
+    neighborDict = evalNeighborhood(i, j, hij, simulationState, config, computeKernels = computeKernels)
     # neighborDict['initialPositions'] = simulationState['fluidPositions'].clone()
     return neighborDict
 
-def evalNeighborhood(i, j, hij, simulationState: dict, config: dict):
+def evalNeighborhood(i, j, hij, simulationState: dict, config: dict, computeKernels = True):
     periodic = config['domain']['periodicity']
     minDomain = config['domain']['minExtent']
     maxDomain = config['domain']['maxExtent']
@@ -297,21 +297,32 @@ def evalNeighborhood(i, j, hij, simulationState: dict, config: dict):
         hijFiltered = actual_hij[iFiltered]
 
         # rij = torch.clamp(rij, 0, 1)
-    with record_function("NeighborSearch [kernel Computation]"):
-        Wij = kernel.kernel(rij, hijFiltered, dim)
-        gradWij = kernel.kernelGradient(rij, xij, hijFiltered, dim) 
+    if computeKernels:
+        with record_function("NeighborSearch [kernel Computation]"):
+            Wij = kernel.kernel(rij, hijFiltered, dim)
+            gradWij = kernel.kernelGradient(rij, xij, hijFiltered, dim) 
 
-    neighborDict = {
-        'indices': (iFiltered, jFiltered),
-        'fullIndices': (i, j),
-        'distances': rij,
-        'vectors': xij,
-        'supports': hijFiltered,
-        'fullSupports': hij,
-        'kernels': Wij,
-        'gradients': gradWij,
-        'initialPositions': initialPositions
-    }
+        neighborDict = {
+            'indices': (iFiltered, jFiltered),
+            'fullIndices': (i, j),
+            'distances': rij,
+            'vectors': xij,
+            'supports': hijFiltered,
+            'fullSupports': hij,
+            'kernels': Wij,
+            'gradients': gradWij,
+            'initialPositions': initialPositions
+        }
+    else:
+        neighborDict = {
+            'indices': (iFiltered, jFiltered),
+            'fullIndices': (i, j),
+            'distances': rij,
+            'vectors': xij,
+            'supports': hijFiltered,
+            'fullSupports': hij,
+            'initialPositions': initialPositions
+        }
     return neighborDict
 
 from diffSPH.parameter import Parameter

@@ -49,7 +49,7 @@ parser.add_argument('--L', type=float, default=1)
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--baseFrequency', type=float, default=1)
 parser.add_argument('--octaves', type=int, default=4)
-parser.add_argument('--frameLimit', type=int, default=4096 * 3)
+parser.add_argument('--frameLimit', type=int, default=4096)
 parser.add_argument("--verbose", help="increase output verbosity",)
 args = parser.parse_args()
 
@@ -90,7 +90,7 @@ config = {
         'freeSurface': False
     },
     'timestep':{
-        'dt':0.00033333333,
+        'dt':0.001,
         'active':False,
         'minDt':1e-6,
     },
@@ -123,7 +123,7 @@ config = {
         'exportFPS': 30,
     },
     'export':{
-        'active': False,
+        'active': True,
     #     'path': 'export',
         'namingScheme': name,
     #     'interval': 1,
@@ -212,7 +212,7 @@ Ek0 = 0.5 * particleState['fluidAreas'] * particleState['fluidDensities'] * torc
 targetEK = 3000
 ratio = np.sqrt(targetEK / Ek0.detach().sum().cpu().item())
 # print(f'ratio: {ratio}')
-particleState['fluidVelocities'] = particleState['fluidVelocities'] * ratio
+# particleState['fluidVelocities'] = particleState['fluidVelocities'] * ratio
 
 initialVelocities = particleState['fluidVelocities'].clone()
 

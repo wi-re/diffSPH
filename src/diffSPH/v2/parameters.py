@@ -113,7 +113,7 @@ def parseDomainConfig(config: dict):
     else:
         minExtent = torch.tensor([minExtent]*config['domain']['dim'], dtype = config['compute']['dtype'], device = config['compute']['device'])
     if isinstance(maxExtent, list):
-        maxExtent = torch.tensor(minExtent, dtype = config['compute']['dtype'], device = config['compute']['device'])
+        maxExtent = torch.tensor(maxExtent, dtype = config['compute']['dtype'], device = config['compute']['device'])
     else:
         maxExtent = torch.tensor([maxExtent]*config['domain']['dim'], dtype = config['compute']['dtype'], device = config['compute']['device'])
     

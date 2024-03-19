@@ -56,7 +56,10 @@ def printState(particleState):
                 else:
                     print(f'state[{k:24s}][{kk:18s}]: {particleState[k][kk]}\t[{type(particleState[k][kk])}]')        
         else:
-            print(f'state[{k:24s}]: {particleState[k]:10}\t[{type(particleState[k])}]')
+            if particleState[k] is None:
+                print(f'state[{k:24s}]: None')
+            else:
+                print(f'state[{k:24s}]: {particleState[k]:10}\t[{type(particleState[k])}]')
 
 
 def computeStatistics(perennialState, particleState, config, print = False):
