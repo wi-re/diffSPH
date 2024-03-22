@@ -1,5 +1,5 @@
 import torch
-from diffSPH.v2.sphOps import sphOperationFluidState, sphOperation
+from diffSPH.v2.sphOps import sphOperationStates, sphOperation
 from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrices
 from torch.profiler import record_function
 
@@ -7,10 +7,10 @@ from diffSPH.v2.math import mod
 
 def computeGravity(fluidState, config):
     if not config['gravity']['active']:
-        return torch.zeros_like(fluidState['fluidVelocities'])
+        return torch.zeros_like(fluidState['velocities'])
     with record_function("[SPH] - External Gravity Field (g)"):
         if config['gravity']['gravityMode'] == 'potentialField':
-            x = fluidState['fluidPositions']
+            x = fluidState['positions']
             minD = config['domain']['minExtent']
             maxD = config['domain']['maxExtent']
             periodicity = config['domain']['periodicity']
@@ -25,7 +25,7 @@ def computeGravity(fluidState, config):
             return - magnitude**2 * xij * (rij)[:,None] #/ fluidState['fluidDensities'][:,None]
         else:
             v = fluidState['fluidVelocities']
-            direction = torch.tensor(config['gravity']['direction'], dtype = fluidState['fluidPositions'].dtype, device = fluidState['fluidPositions'].device)
+            direction = torch.tensor(config['gravity']['direction'], dtype = fluidState['positions'].dtype, device = fluidState['positions'].device)
             return (direction[:v.shape[1]] * config['gravity']['magnitude']).repeat(v.shape[0], 1)
 
 

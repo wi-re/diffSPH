@@ -209,47 +209,52 @@ def neighborSearchVerlet(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, per
 
 
 from torch.profiler import record_function
-def fluidNeighborSearch(simulationState: dict, config: dict, computeKernels = True):
-    if 'fluidNeighborhood' in simulationState:
+def neighborSearch(stateA: dict, stateB : dict, config: dict, computeKernels = True, priorNeighborhood = None):
+    if priorNeighborhood is not None:
         # print('Using prior neighborhood')
-        return evalNeighborhood(*simulationState['fluidNeighborhood']['fullIndices'], simulationState['fluidNeighborhood']['fullSupports'], simulationState, config, computeKernels = computeKernels)
+        return evalNeighborhood(*priorNeighborhood['fullIndices'], priorNeighborhood['fullSupports'], stateA, stateB, config, computeKernels = computeKernels, priorNeighborhood = priorNeighborhood)
     
-    i, j, hij = neighborSearchVerlet(simulationState['fluidPositions'], simulationState['fluidPositions'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
+    i, j, hij = neighborSearchVerlet(stateA['positions'], stateB['positions'], stateA['supports'] * config['neighborhood']['verletScale'], stateB['supports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
 
-    neighborDict = evalNeighborhood(i, j, hij, simulationState, config, computeKernels = computeKernels)
+    neighborDict = evalNeighborhood(i, j, hij, stateA, stateB, config, computeKernels = computeKernels)
     # neighborDict['initialPositions'] = simulationState['fluidPositions'].clone()
     return neighborDict
 
-def evalNeighborhood(i, j, hij, simulationState: dict, config: dict, computeKernels = True):
+def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKernels = True, priorNeighborhood: Optional[dict] = None):
     periodic = config['domain']['periodicity']
     minDomain = config['domain']['minExtent']
     maxDomain = config['domain']['maxExtent']
 
-    x = simulationState['fluidPositions']
-    y = simulationState['fluidPositions']
+    x = stateA['positions']
+    y = stateB['positions']
 
     # initialPositions = simulationState['fluidPositions'].clone()
-    initialPositions = simulationState['fluidPositions'].clone()
-    if 'fluidNeighborhood' in simulationState:
-        if 'initialPositions' in simulationState['fluidNeighborhood']:
-            if simulationState['fluidNeighborhood']['initialPositions'].shape == simulationState['fluidPositions'].shape:
-                initialPositions = simulationState['fluidNeighborhood']['initialPositions']
-                distances = torch.linalg.norm(simulationState['fluidNeighborhood']['initialPositions'] - simulationState['fluidPositions'], dim = -1)
-                maxDistance = distances.max()
-                if maxDistance * 2 > (config['neighborhood']['verletScale'] - 1) * simulationState['fluidSupports'].min():    
+    initialPositions = (stateA['positions'].clone(), stateB['positions'].clone())
+
+    if priorNeighborhood is not None:
+        if 'initialPositions' in priorNeighborhood:
+            if \
+                (priorNeighborhood['initialPositions'][0].shape == stateA['positions'].shape) and\
+                (priorNeighborhood['initialPositions'][1].shape == stateB['positions'].shape):
+                initialPositions = priorNeighborhood['initialPositions']
+                distancesA = torch.linalg.norm(initialPositions[0] - stateA['positions'], dim = -1)
+                distancesB = torch.linalg.norm(initialPositions[1] - stateB['positions'], dim = -1)
+                maxDistance = max(distancesA.max(), distancesB.max())
+                minSupport = min(stateA['supports'].min(), stateB['supports'].min())
+                if maxDistance * 2 > (config['neighborhood']['verletScale'] - 1) * minSupport:    
                     # print('Recomputing neighborhood (maxDistance = ', maxDistance / simulationState['fluidSupports'].min(), ')')
-                    i, j, hij = neighborSearchVerlet(simulationState['fluidPositions'], simulationState['fluidPositions'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
+                    i, j, hij = neighborSearchVerlet(stateA['positions'], stateB['positions'], stateA['supports'] * config['neighborhood']['verletScale'], stateB['supports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
                     hij / config['neighborhood']['verletScale']
-                    initialPositions = simulationState['fluidPositions'].clone()
+                    initialPositions = (stateA['positions'].clone(), stateB['positions'].clone())
             else:
-                i, j, hij = neighborSearchVerlet(simulationState['fluidPositions'], simulationState['fluidPositions'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
+                i, j, hij = neighborSearchVerlet(stateA['positions'], stateB['positions'], stateA['supports'] * config['neighborhood']['verletScale'], stateB['supports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
                 hij / config['neighborhood']['verletScale']
-                initialPositions = simulationState['fluidPositions'].clone()
+                initialPositions = (stateA['positions'].clone(), stateB['positions'].clone())
             # else:
                 # print('Reusing prior neighborsearch (maxDistance = ', maxDistance / simulationState['fluidSupports'].min(), ')')
         else:
             # print('Recomputing neighborhood (no prior positions)')
-            i, j, hij = neighborSearchVerlet(simulationState['fluidPositions'], simulationState['fluidPositions'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], simulationState['fluidSupports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
+            i, j, hij = neighborSearchVerlet(stateA['positions'], stateB['positions'], stateA['supports'] * config['neighborhood']['verletScale'], stateB['supports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
             hij / config['neighborhood']['verletScale']
             
     # hij = hij 

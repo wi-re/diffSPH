@@ -1,5 +1,5 @@
 import torch
-from diffSPH.v2.sphOps import sphOperationFluidState
+from diffSPH.v2.sphOps import sphOperationStates
 from diffSPH.v2.math import mod, scatter_sum
 import numpy as np
 from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrices
@@ -7,19 +7,19 @@ from diffSPH.v2.math import scatter_sum
 from torch.profiler import record_function
 
 # See Maronne et al: Fast free-surface detection and level-set function definition in SPH solvers
-def detectFreeSurfaceMaronne(fluidState, simConfig):
+def detectFreeSurfaceMaronne(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Free Surface Detection (Maronne)"):
-        particles = fluidState['fluidPositions']
-        n = fluidState['fluidNormals'] if 'fluidNormals' in fluidState else computeNormalsMaronne(fluidState, simConfig)[0]
+        particles = stateA['positions']
+        n = stateA['normals'] if 'normals' in stateA else computeNormalsMaronne(stateA, stateB, neighborhood, simConfig)[0]
         numParticles = particles.shape[0]
-        supports = fluidState['fluidSupports']
+        supports = stateA['supports']
         periodicity = simConfig['domain']['periodicity']
         domainMin = simConfig['domain']['minExtent']
         domainMax = simConfig['domain']['maxExtent']
 
-        i,j = fluidState['fluidNeighborhood']['indices']
-        rij = fluidState['fluidNeighborhood']['distances']
-        hij = fluidState['fluidNeighborhood']['supports']
+        i,j = neighborhood['indices']
+        rij = neighborhood['distances']
+        hij = neighborhood['supports']
 
         
         T = particles + n * supports.view(-1,1) / simConfig['kernel']['kernelScale'] / 3
@@ -42,11 +42,11 @@ def detectFreeSurfaceMaronne(fluidState, simConfig):
         return fs, cA, cB
 
 # See Maronne et al: Fast free-surface detection and level-set function definition in SPH solvers
-def computeNormalsMaronne(fluidState, simConfig):    
+def computeNormalsMaronne(stateA, stateB, neighborhood, simConfig):    
     with record_function("[SPH] - Normal Computation (Maronne)"):
-        ones = fluidState['fluidPositions'].new_ones(fluidState['fluidPositions'].shape[0])
-        term = sphOperationFluidState(fluidState, (ones, ones), operation = 'gradient', gradientMode='naive')
-        L, lambdas = (fluidState['fluidL'], fluidState['L.EVs']) if 'fluidL' in fluidState else computeNormalizationMatrices(fluidState, simConfig)
+        ones = stateA['positions'].new_ones(stateA['positions'].shape[0])
+        term = sphOperationStates(stateA, stateB, (ones, ones), operation = 'gradient', gradientMode='naive', neighborhood = neighborhood)
+        L, lambdas = (stateA['L'], stateA['L.EVs']) if 'L' in stateA else computeNormalizationMatrices(stateA, stateB, neighborhood, simConfig)
 
         nu = torch.bmm(L, term.unsqueeze(-1)).squeeze(-1)
         n = -torch.nn.functional.normalize(nu, dim = -1)
@@ -54,49 +54,49 @@ def computeNormalsMaronne(fluidState, simConfig):
 
         return n, lMin
 
-def expandFreeSurfaceMask(fluidState, simConfig):
+def expandFreeSurfaceMask(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Free Surface Mask Expansion"):
-        fs = fluidState['fluidFreeSurface']
-        i,j = fluidState['fluidNeighborhood']['indices']
-        numParticles = fluidState['fluidPositions'].shape[0]
+        fs = stateA['freeSurface']
+        i,j = neighborhood['indices']
+        numParticles = stateA['positions'].shape[0]
 
         fsm = torch.clone(fs)
         for ii in range(simConfig['surfaceDetection']['expansionIterations']):
             fsm = scatter_sum(fsm[j], i, dim = 0, dim_size = numParticles)
         return fsm > 0
 
-def computeColorField(fluidState, simConfig):
+def computeColorField(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Color Field Computation"):
-        ones = fluidState['fluidPositions'].new_ones(fluidState['fluidPositions'].shape[0])
-        color = sphOperationFluidState(fluidState, (ones, ones), operation = 'interpolate')
+        ones = stateA['positions'].new_ones(stateA['positions'].shape[0])
+        color = sphOperationStates(stateA, stateB, (ones, ones), operation = 'interpolate', neighborhood = neighborhood)
         return color
-def computeColorFieldGradient(fluidState, simConfig):
+def computeColorFieldGradient(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Color Field Gradient Computation"):
-        color = sphOperationFluidState(fluidState, (fluidState['fluidColor'], fluidState['fluidColor']), operation = 'gradient', gradientMode = 'difference')
+        color = sphOperationStates(stateA, stateB, (stateA['color'], stateB['color']), operation = 'gradient', gradientMode = 'difference', neighborhood = neighborhood)
         return color
 
-def detectFreeSurfaceColorFieldGradient(fluidState, simConfig):
+def detectFreeSurfaceColorFieldGradient(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Free Surface Detection (Color Field Gradient)"):
-        gradColorField = fluidState['fluidColorGradient']
-        fs = torch.linalg.norm(gradColorField, dim = -1) > simConfig['surfaceDetection']['colorFieldGradientThreshold'] * fluidState['fluidSupports'] / simConfig['kernel']['kernelScale']
+        gradColorField = stateA['colorGradient']
+        fs = torch.linalg.norm(gradColorField, dim = -1) > simConfig['surfaceDetection']['colorFieldGradientThreshold'] * stateA['supports'] / simConfig['kernel']['kernelScale']
         return fs
 
-def detectFreeSurfaceColorField(fluidState, simConfig):
+def detectFreeSurfaceColorField(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Free Surface Detection (Color Field)"):
-        colorField = fluidState['fluidColor']
-        numParticles = fluidState['numParticles']
-        i, j = fluidState['fluidNeighborhood']['indices']
+        colorField = stateA['color']
+        numParticles = stateA['numParticles']
+        i, j = neighborhood['indices']
         nj = scatter_sum(torch.ones_like(j), i, dim = 0, dim_size = numParticles)
         colorFieldMean = scatter_sum(colorField[j], i, dim = 0, dim_size = numParticles) / nj
         fs = torch.where((colorField < colorFieldMean) & (nj < simConfig['kernel']['targetNeighbors'] * simConfig['surfaceDetection']['colorFieldThreshold']), 1., 0.)
         return fs
 
 # Barecasco et al 2013: Simple free-surface detection in two and three-dimensional SPH solver
-def detectFreeSurfaceBarecasco(simulationState, simConfig):
+def detectFreeSurfaceBarecasco(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Free Surface Detection (Barecasco)"):
-        xij = simulationState['fluidNeighborhood']['vectors']
-        (i,j) = simulationState['fluidNeighborhood']['indices']
-        numParticles = simulationState['numParticles']
+        xij = neighborhood['vectors']
+        (i,j) = neighborhood['indices']
+        numParticles = stateA['numParticles']
 
         coverVector = scatter_sum(-xij, i, dim = 0, dim_size = numParticles)
         normalized = torch.nn.functional.normalize(coverVector)
@@ -107,17 +107,17 @@ def detectFreeSurfaceBarecasco(simulationState, simConfig):
         return fs
 
 # from torch_scatter import scatter
-def computeSurfaceDistance(simulationState, simConfig):
+def computeSurfaceDistance(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Surface Distance Computation"):
-        surfaceDistance = simulationState['freeSurface'].new_zeros(simulationState['numParticles'], dtype = simConfig['compute']['dtype'])
+        surfaceDistance = stateA['freeSurface'].new_zeros(stateA['numParticles'], dtype = simConfig['compute']['dtype'])
         surfaceDistance[:] = 1e4
-        surfaceDistance[simulationState['freeSurface']] = simConfig['particle']['dx']
+        surfaceDistance[stateA['freeSurface']] = simConfig['particle']['dx']
 
-        (i,j) = simulationState['fluidNeighborhood']['indices']
+        (i,j) = neighborhood['indices']
 
         for step in range(simConfig['surfaceDetection']['distanceIterations']):
-            distance = surfaceDistance[j] + simulationState['fluidNeighborhood']['distances'] * simulationState['fluidNeighborhood']['supports']
-            newDistance = distance.new_zeros(simulationState['numParticles'], dtype = simConfig['compute']['dtype'])
+            distance = surfaceDistance[j] + neighborhood['distances'] * neighborhood['supports']
+            newDistance = distance.new_zeros(stateA['numParticles'], dtype = simConfig['compute']['dtype'])
             newDistance.index_reduce_(dim = 0, index = i, source = distance, include_self = False, reduce = 'amin')
             # newDistance = scatter(distance, i, dim = 0, reduce = 'min', dim_size = simulationState['numParticles'])
             update = torch.mean((newDistance - surfaceDistance)**2)
@@ -128,8 +128,8 @@ def computeSurfaceDistance(simulationState, simConfig):
 
         return surfaceDistance
 
-def getStableSurfaceNormal(simulationState, simConfig):
-    return sphOperationFluidState(simulationState, (simulationState['surfaceDistance'], simulationState['surfaceDistance']), operation = 'gradient', gradientMode = 'symmetric')
+def getStableSurfaceNormal(stateA, stateB, neighborhood, simConfig):
+    return sphOperationStates(stateA, stateB, (stateA['surfaceDistance'], stateB['surfaceDistance']), operation = 'gradient', gradientMode = 'symmetric', neighborhood = neighborhood)
     
 
 from diffSPH.parameter import Parameter

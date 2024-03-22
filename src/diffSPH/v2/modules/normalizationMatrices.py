@@ -1,14 +1,14 @@
 import torch
 from diffSPH.v2.math import pinv2x2
-from diffSPH.v2.sphOps import sphOperation, sphOperationFluidState
+from diffSPH.v2.sphOps import sphOperation, sphOperationStates
 from torch.profiler import record_function
 
 
-def computeNormalizationMatrices(fluidState, simConfig):
+def computeNormalizationMatrices(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Normalization Matrices (nabla x)"):
         with record_function("[SPH] - Normalization Matrices (Matrix Computation)"):
-            distances = -(fluidState['fluidNeighborhood']['distances'] * fluidState['fluidNeighborhood']['supports']).view(-1,1) * fluidState['fluidNeighborhood']['vectors']
-            normalizationMatrices = sphOperationFluidState(fluidState, distances, operation = 'gradient', gradientMode = 'difference')
+            distances = -(neighborhood['distances'] * neighborhood['supports']).view(-1,1) * neighborhood['vectors']
+            normalizationMatrices = sphOperationStates(stateA, stateB, distances, operation = 'gradient', gradientMode = 'difference', neighborhood = neighborhood)
   
         with record_function("[SPH] - Normalization Matrices (Pseudo-Inverse)"):
             L, lambdas = pinv2x2(normalizationMatrices)

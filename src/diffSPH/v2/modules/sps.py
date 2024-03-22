@@ -1,12 +1,12 @@
 from diffSPH.v2.math import scatter_sum
 import torch
 from math import sqrt
-from diffSPH.v2.sphOps import sphOperationFluidState
+from diffSPH.v2.sphOps import sphOperationStates
 
-def computeSPSTurbulence(perennialState, config):
+def computeSPSTurbulence(stateA, stateB, neighborhood, config):
     if config['SPS']['active'] == False:
-        return torch.zeros_like(perennialState['fluidVelocities'])
-    velGrad = -sphOperationFluidState(perennialState, (perennialState['fluidVelocities'], perennialState['fluidVelocities']), 'gradient', 'difference')
+        return torch.zeros_like(stateA['velocities'])
+    velGrad = -sphOperationStates(stateA, stateB, (stateA['velocities'], stateB['velocities']), 'gradient', 'difference')
     # - from dual sphysics
 
     u_xx = velGrad[:,0,0]
@@ -32,19 +32,19 @@ def computeSPSTurbulence(perennialState, config):
     sps_blinn = Sps_blinn * prr
     sumsps = -(sps_k + sps_blinn)
 
-    onerho = 1 / perennialState['fluidDensities']
+    onerho = 1 / stateA['densities']
     tau_xx = onerho * (2 * visc_sps * u_xx + sumsps)
     tau_xy = onerho * (visc_sps * u_xy)
     tau_yy = onerho * (2 * visc_sps * u_yy + sumsps)
 
-    m = perennialState['fluidMasses']
-    (i,j) = perennialState['fluidNeighborhood']['indices']
-    gradWij = perennialState['fluidNeighborhood']['gradients']
+    m = stateA['masses']
+    (i,j) = neighborhood['indices']
+    gradWij = neighborhood['gradients']
 
     dudt_x = m[j] * ((tau_xx[i] + tau_xx[j]) * gradWij[:,0] + (tau_xy[i] + tau_xy[j]) * gradWij[:,1])
     dudt_y = m[j] * ((tau_xy[i] + tau_xy[j]) * gradWij[:,0] + (tau_yy[i] + tau_yy[j]) * gradWij[:,1])
     dudt = torch.stack([dudt_x, dudt_y], dim = 1)
-    dudt = scatter_sum(dudt, i, dim = 0, dim_size = perennialState['fluidPositions'].shape[0])
+    dudt = scatter_sum(dudt, i, dim = 0, dim_size = stateA['positions'].shape[0])
 
     return dudt 
 

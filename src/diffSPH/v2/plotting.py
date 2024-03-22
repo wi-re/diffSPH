@@ -104,7 +104,7 @@ def scatterPlotSymmetric(fig, axis, p, c, domainMin, domainMax, label = None, pe
 
 
 def scatterPlotFluid(fig, axis, state, config, q, label = None, cmap = 'viridis', s = None):
-    x = state['fluidPositions'].detach().cpu()
+    x = state['fluid']['positions'].detach().cpu()
     s = 5000 / x.shape[0] if s is None else s
     dim = x.shape[1]
     domainMin = config['domain']['minExtent']
@@ -127,7 +127,7 @@ def scatterPlotFluid(fig, axis, state, config, q, label = None, cmap = 'viridis'
     return sc, cb
 
 def scatterPlotFluidSymmetric(fig, axis, state, config, q, label = None, cmap = 'viridis', s = None):
-    x = state['fluidPositions'].detach().cpu()
+    x = state['fluid']['positions'].detach().cpu()
     s = 5000 / x.shape[0] if s is None else s
     dim = x.shape[1]
     domainMin = config['domain']['minExtent']
@@ -149,7 +149,7 @@ def scatterPlotFluidSymmetric(fig, axis, state, config, q, label = None, cmap = 
     axis.set_ylim(-1.05,1.05)
     return sc, cb
 
-    # sc = axis.scatter(state['fluidPositions'][:,0], state['fluidPositions'][:,1], s = 8, c = q)
+    # sc = axis.scatter(state['fluid']['positions'][:,0], state['fluid']['positions'][:,1], s = 8, c = q)
     # ax1_divider = make_axes_locatable(axis)
     # cax1 = ax1_divider.append_axes("right", size="4%", pad="1%")
     # cb = fig.colorbar(sc, cax=cax1,orientation='vertical')
@@ -189,45 +189,45 @@ import matplotlib
 from diffSPH.v2.sphOps import sphOperation
 def mapToGrid(visualizationState, quantity):
     return sphOperation(
-        (None, visualizationState['fluidMasses']), 
-        (None, visualizationState['fluidDensities']), 
+        (None, visualizationState['fluid']['masses']), 
+        (None, visualizationState['fluid']['densities']), 
         (quantity, quantity), 
         (visualizationState['gridNeighborhood']['indices'][0], visualizationState['gridNeighborhood']['indices'][1]), visualizationState['gridNeighborhood']['kernels'], visualizationState['gridNeighborhood']['gradients'], 
         visualizationState['gridNeighborhood']['distances'], visualizationState['gridNeighborhood']['vectors'],
         visualizationState['gridNeighborhood']['supports'],   
         visualizationState['grid'].shape[0], operation = 'interpolate')
 
-from diffSPH.v2.modules.neighborhood import neighborSearch, fluidNeighborSearch
+from diffSPH.v2.modules.neighborhood import neighborSearch
 from diffSPH.kernels import getKernel
-from diffSPH.v2.sphOps import sphOperationFluidState, sphOperation
+from diffSPH.v2.sphOps import sphOperationStates, sphOperation
 import copy
 
 def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhood = True, grid = True):
     visualizationState = copy.deepcopy(perennialState)
     if fluidNeighborhood:
-        visualizationState['fluidNeighborhood'] = fluidNeighborSearch(visualizationState, config)
-        visualizationState['fluidDensities'] = sphOperationFluidState(visualizationState, None, 'density')
-    visualizationState['fluidMasses'] = perennialState['fluidMasses']
+        visualizationState['fluidNeighborhood'] = neighborSearch(visualizationState['fluid'],visualizationState['fluid'], config)
+        visualizationState['fluid']['densities'] = sphOperationStates(visualizationState['fluid'], visualizationState['fluid'], None, 'density', neighborhood = visualizationState['fluidNeighborhood'])
+    visualizationState['fluid']['masses'] = perennialState['fluid']['masses']
 
-    visualizationState['fluidVelocities'] = perennialState['fluidVelocities']
-    x = perennialState['fluidPositions']
+    visualizationState['fluid']['velocities'] = perennialState['fluid']['velocities']
+    x = perennialState['fluid']['positions']
 
     periodicity = config['domain']['periodicity']
     minD = config['domain']['minExtent']
     maxD = config['domain']['maxExtent']
 
     if periodicity[0] and not periodicity[1]:
-        visualizationState['fluidPositions'] = torch.stack((torch.remainder(x[:,0] - minD[0], maxD[0] - minD[0]) + minD[0], x[:,1]), dim = 1)
+        visualizationState['fluid']['positions'] = torch.stack((torch.remainder(x[:,0] - minD[0], maxD[0] - minD[0]) + minD[0], x[:,1]), dim = 1)
     elif not periodicity[0] and periodicity[1]:
-        visualizationState['fluidPositions'] = torch.stack((x[:,0], torch.remainder(x[:,1] - minD[1], maxD[1] - minD[1]) + minD[1]), dim = 1)
+        visualizationState['fluid']['positions'] = torch.stack((x[:,0], torch.remainder(x[:,1] - minD[1], maxD[1] - minD[1]) + minD[1]), dim = 1)
     elif periodicity[0] and periodicity[1]:
-        visualizationState['fluidPositions'] = torch.remainder(x - minD, maxD - minD) + minD
+        visualizationState['fluid']['positions'] = torch.remainder(x - minD, maxD - minD) + minD
     else:
-        visualizationState['fluidPositions'] = x  
+        visualizationState['fluid']['positions'] = x  
 
     # nGrid = 128
-    xGrid = torch.linspace(config['domain']['minExtent'][0], config['domain']['maxExtent'][0], nGrid, dtype = perennialState['fluidPositions'].dtype, device = perennialState['fluidPositions'].device)
-    yGrid = torch.linspace(config['domain']['minExtent'][1], config['domain']['maxExtent'][1], nGrid, dtype = perennialState['fluidPositions'].dtype, device = perennialState['fluidPositions'].device)
+    xGrid = torch.linspace(config['domain']['minExtent'][0], config['domain']['maxExtent'][0], nGrid, dtype = perennialState['fluid']['positions'].dtype, device = perennialState['fluid']['positions'].device)
+    yGrid = torch.linspace(config['domain']['minExtent'][1], config['domain']['maxExtent'][1], nGrid, dtype = perennialState['fluid']['positions'].dtype, device = perennialState['fluid']['positions'].device)
     X, Y = torch.meshgrid(xGrid, yGrid, indexing = 'xy')
     P = torch.stack([X,Y], dim=-1).flatten(0,1)
     if grid:
@@ -235,7 +235,7 @@ def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhoo
         visualizationState['X'] = X
         visualizationState['Y'] = Y
         visualizationState['nGrid'] = nGrid
-        i, j, rij, xij, hij, Wij, gradWij = neighborSearch(visualizationState['grid'], visualizationState['fluidPositions'], 0, perennialState['fluidSupports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
+        i, j, rij, xij, hij, Wij, gradWij = neighborSearch(visualizationState['grid'], visualizationState['fluid']['positions'], 0, perennialState['fluidSupports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
         visualizationState['gridNeighborhood'] = {}
         visualizationState['gridNeighborhood']['indices'] = (i, j)
         visualizationState['gridNeighborhood']['distances'] = rij
@@ -274,7 +274,7 @@ def visualizeParticles(fig, axis, config, visualizationState, inputQuantity, map
     else:
         quantity = inputQuantity
 
-    pos_x = visualizationState['fluidPositions']
+    pos_x = visualizationState['fluid']['positions']
 
     minScale = torch.min(quantity)
     maxScale = torch.max(quantity)
@@ -353,7 +353,7 @@ def updatePlot(plotState, visualizationState, inputQuantity):
     else:
         quantity = inputQuantity
 
-    pos_x = visualizationState['fluidPositions']
+    pos_x = visualizationState['fluid']['positions']
     qcpu = quantity.detach().cpu()
     minScale = torch.min(qcpu)
     maxScale = torch.max(qcpu)
@@ -501,7 +501,7 @@ def plotPSD(fig, axis, kvals, Abins, peaks = None):
 
 
 from diffSPH.v2.plotting import computePSD, plotFFT, plotPSD, mapToGrid
-from diffSPH.v2.sphOps import sphOperationFluidState
+from diffSPH.v2.sphOps import sphOperationStates
 # from diffSPH.v2.plotting import updatePlot, visualizeParticles, prepVisualizationState
 import os
 

@@ -1,11 +1,11 @@
 import torch
-from diffSPH.v2.sphOps import sphOperationFluidState, sphOperation
+from diffSPH.v2.sphOps import sphOperationStates, sphOperation
 from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrices
 from torch.profiler import record_function
 
 
 # See Sun et al: The delta SPH-model: Simple procedures for a further improvement of the SPH scheme
-def computeTimestep(perennialState, config):
+def computeTimestep(state, config):
     if not config['timestep']['active']:
         return config['timestep']['dt']
     with record_function("[SPH] - Adaptive Timestep Update"):
@@ -19,8 +19,8 @@ def computeTimestep(perennialState, config):
         # print(dt_v, dt_c)
 
         # acceleration timestep condition
-        if 'fluid_dudt' in perennialState: 
-            dudt = perennialState['fluid_dudt']
+        if 'dudt' in state: 
+            dudt = state['dudt']
             max_accel = torch.max(torch.linalg.norm(dudt[~torch.isnan(dudt)], dim = -1))
             dt_a = 0.25 * torch.sqrt(config['particle']['support'] / (max_accel + 1e-7)) / config['kernel']['kernelScale']
         else:

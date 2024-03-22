@@ -3,7 +3,7 @@ from torch.profiler import record_function
 
 
 def stiffTaitEOS(simulationState, config):
-    density = simulationState['fluidDensities']    
+    density = simulationState['densities']    
     reference_density = config['fluid']['rho0']
     sound_speed = config['fluid']['cs']
     exponent = config['EOS']['polytropicExponent']
@@ -11,7 +11,7 @@ def stiffTaitEOS(simulationState, config):
     return reference_density * sound_speed**2 / exponent * ((density / reference_density)**exponent - 1)
 
 def TaitEOS(simulationState, config):
-    density = simulationState['fluidDensities']
+    density = simulationState['densities']
     reference_density = config['fluid']['rho0']
     kappa = config['EOS']['kappa']
 
@@ -19,27 +19,27 @@ def TaitEOS(simulationState, config):
 
 
 def idealGasEOS(simulationState, config):
-    density = simulationState['fluidDensities']
-    temperature = simulationState['fluidTemperatures']
+    density = simulationState['densities']
+    temperature = simulationState['temperatures']
     gas_constant = config['gas_constant'] 
 
     return density * gas_constant * temperature / config['EOS']['molarMass']
 
 def isoThermalEOS(simulationState, config):
-    density = simulationState['fluidDensities']
+    density = simulationState['densities']
     reference_density = config['fluid']['rho0']
     sound_speed = config['fluid']['cs']
 
     return sound_speed**2 * (density - reference_density)
 
 def polytropicEOS(simulationState, config):
-    density = simulationState['fluidDensities']
+    density = simulationState['densities']
     exponent = config['EOS']['polytropicExponent']
 
     return config['EOS']['kappa'] * (density)**exponent
 
 def murnaghanEOS(simulationState, config):
-    density = simulationState['fluidDensities']
+    density = simulationState['densities']
     reference_density = config['fluid']['rho0']
     exponent = config['EOS']['polytropicExponent']
 

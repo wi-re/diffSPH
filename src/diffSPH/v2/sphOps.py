@@ -236,22 +236,22 @@ def sphOperation(
             return div
     
 
-def sphOperationFluidState(fluidState, quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]], operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div'):
+def sphOperationStates(stateA, stateB, quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]], neighborhood: dict, operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div'):
     if operation == 'density':
         return sphDensityInterpolation(
-            (fluidState['fluidMasses'], fluidState['fluidMasses']), 
-            (fluidState['fluidMasses'], fluidState['fluidMasses']),
-            (fluidState['fluidMasses'], fluidState['fluidMasses']), 
-            fluidState['fluidNeighborhood']['indices'], 
-            fluidState['fluidNeighborhood']['kernels'], 
-            fluidState['numParticles'])
+            (stateA['masses'], stateB['masses']), 
+            (stateA['masses'], stateB['masses']),
+            (stateA['masses'], stateB['masses']), 
+            neighborhood['indices'], 
+            neighborhood['kernels'], 
+            stateA['numParticles'])
     return sphOperation(
-        (fluidState['fluidMasses'], fluidState['fluidMasses']), 
-        (fluidState['fluidDensities'], fluidState['fluidDensities']),
+        (stateA['masses'], stateB['masses']), 
+        (stateA['densities'], stateB['densities']),
         quantities, 
-        fluidState['fluidNeighborhood']['indices'], 
-        fluidState['fluidNeighborhood']['kernels'], fluidState['fluidNeighborhood']['gradients'], 
-        fluidState['fluidNeighborhood']['distances'], fluidState['fluidNeighborhood']['vectors'], fluidState['fluidNeighborhood']['supports'], 
-        fluidState['numParticles'], 
+        neighborhood['indices'], 
+        neighborhood['kernels'], neighborhood['gradients'], 
+        neighborhood['distances'], neighborhood['vectors'], neighborhood['supports'], 
+        stateA['numParticles'], 
         operation = operation, gradientMode = gradientMode, divergenceMode = divergenceMode, 
-        kernelLaplacians = fluidState['fluidNeighborhood']['laplacians'] if 'laplacians' in fluidState['fluidNeighborhood'] else None)
+        kernelLaplacians = neighborhood['laplacians'] if 'laplacians' in neighborhood else None)

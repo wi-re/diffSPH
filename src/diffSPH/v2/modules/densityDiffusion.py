@@ -1,49 +1,49 @@
 import torch
-from diffSPH.v2.sphOps import sphOperationFluidState, sphOperation
+from diffSPH.v2.sphOps import sphOperationStates, sphOperation
 from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrices
 from torch.profiler import record_function
 
 
-def renormalizedDensityGradient(simulationState, config):    
+def renormalizedDensityGradient(stateA, stateB, neighborhood, simConfig):    
     with record_function("[SPH] - Density Gradient Renormalization (nabla^L rho_i)"):
-        (i, j) = simulationState['fluidNeighborhood']['indices']
+        (i, j) = neighborhood['indices']
 
-        gradKernel = simulationState['fluidNeighborhood']['gradients']
-        Ls = simulationState['fluidL'][i]
+        gradKernel = neighborhood['gradients']
+        Ls = stateA['fluidL'][i]
 
         normalizedGradients = torch.einsum('ijk,ik->ij', Ls, gradKernel)
 
         return sphOperation(
-            (simulationState['fluidMasses'], simulationState['fluidMasses']), 
-            (simulationState['fluidDensities'], simulationState['fluidDensities']),
-            (simulationState['fluidDensities'], simulationState['fluidDensities']),
-            simulationState['fluidNeighborhood']['indices'], 
-            simulationState['fluidNeighborhood']['kernels'], normalizedGradients,
-            simulationState['fluidNeighborhood']['distances'], simulationState['fluidNeighborhood']['vectors'], simulationState['fluidNeighborhood']['supports'], 
-            simulationState['numParticles'], 
+            (stateA['fluidMasses'], stateB['fluidMasses']), 
+            (stateA['fluidDensities'], stateB['fluidDensities']),
+            (stateA['fluidDensities'], stateB['fluidDensities']),
+            neighborhood['indices'], 
+            neighborhood['kernels'], normalizedGradients,
+            neighborhood['distances'], neighborhood['vectors'], neighborhood['supports'], 
+            stateA['numParticles'], 
             operation = 'gradient', gradientMode = 'difference', divergenceMode = 'div', 
-            kernelLaplacians = simulationState['fluidNeighborhood']['laplacians'] if 'laplacians' in simulationState['fluidNeighborhood'] else None)
+            kernelLaplacians = neighborhood['laplacians'] if 'laplacians' in neighborhood else None)
 
 
-def computeDensityDeltaTerm(fluidState, config):
-    with record_function("[SPH] - Fluid Density Diffusion (delta-SPH)"):
-        (i, j) = fluidState['fluidNeighborhood']['indices']
-        scheme = config['diffusion']['densityScheme']
+def computeDensityDeltaTerm(stateA, stateB, neighborhood, simConfig):
+    with record_function("[SPH] - Density Diffusion (delta-SPH)"):
+        (i, j) = neighborhood['indices']
+        scheme = simConfig['diffusion']['densityScheme']
 
-        rij = fluidState['fluidNeighborhood']['distances'] * fluidState['fluidNeighborhood']['supports']
+        rij = neighborhood['distances'] * neighborhood['supports']
         if scheme == 'deltaSPH':
-            grad_ij = fluidState['fluidGradRho^L'][i] + fluidState['fluidGradRho^L'][j]
-            rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidNeighborhood']['supports'])
-            psi_ij = -rho_ij.view(-1,1) * fluidState['fluidNeighborhood']['vectors'] - grad_ij
+            grad_ij = stateA['fluidGradRho^L'][i] + stateB['fluidGradRho^L'][j]
+            rho_ij = 2 * (stateB['fluidDensities'][j] - stateA['fluidDensities'][i]) / (rij + 1e-6 * neighborhood['supports'])
+            psi_ij = -rho_ij.view(-1,1) * neighborhood['vectors'] - grad_ij
         elif scheme == 'denormalized':
-            grad_ij = fluidState['fluidGradRho'][i] + fluidState['fluidGradRho'][j]
-            rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidNeighborhood']['supports'])
-            psi_ij = -rho_ij.view(-1,1) * fluidState['fluidNeighborhood']['vectors'] - grad_ij
+            grad_ij = stateA['fluidGradRho'][i] + stateB['fluidGradRho'][j]
+            rho_ij = 2 * (stateB['fluidDensities'][j] - stateA['fluidDensities'][i]) / (rij + 1e-6 * neighborhood['supports'])
+            psi_ij = -rho_ij.view(-1,1) * neighborhood['vectors'] - grad_ij
         elif scheme == 'densityOnly':
-            rho_ij = 2 * (fluidState['fluidDensities'][j] - fluidState['fluidDensities'][i]) / (rij + 1e-6 * fluidState['fluidNeighborhood']['supports'])
-            psi_ij = -rho_ij.view(-1,1) * fluidState['fluidNeighborhood']['vectors']
+            rho_ij = 2 * (stateB['fluidDensities'][j] - stateA['fluidDensities'][i]) / (rij + 1e-6 * neighborhood['supports'])
+            psi_ij = -rho_ij.view(-1,1) * neighborhood['vectors']
 
-        return config['diffusion']['delta'] * fluidState['fluidSupports'] / config['kernel']['kernelScale'] * config['fluid']['cs'] * sphOperationFluidState(fluidState, psi_ij, operation = 'divergence', gradientMode='difference')
+        return simConfig['diffusion']['delta'] * stateA['fluidSupports'] / simConfig['kernel']['kernelScale'] * simConfig['fluid']['cs'] * sphOperationStates(stateA, stateB, psi_ij, operation = 'divergence', gradientMode='difference')
 
 
 

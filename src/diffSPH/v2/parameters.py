@@ -68,6 +68,13 @@ plotStateDict = [
     Parameter('', 'mapping', str, '.x', required = False, export = True, hint='Mapping'),
 ]
 
+boundaryParameters = [
+    Parameter('boundary', 'active', bool, False, required = False, export = True, hint='Boundary condition active'),
+    Parameter('boundary', 'type', str, 'mDBC', required = False, export = True, hint='Boundary condition type'),
+    Parameter('boundary', 'static', bool, True, required = False, export = True, hint='Static boundary condition'),
+    Parameter('boundary', 'twoWayCoupled', bool, False, required = False, export = True, hint='Two-way coupled boundary condition'),
+]
+
 plotParameters = [
     Parameter('plot', 'mosaic', str, 'A', required = False, export = True, hint='Mosaic plot layout'),
     Parameter('plot', 'figSize', List[float], [6,5.5], required = False, export = True, hint='Figure size'),
@@ -91,7 +98,7 @@ exportParameters = [
     Parameter('export', 'interval', int, 1, required = False, export = True, hint='Export interval'),
 ]
 
-defaultParameters = particleParameters + computeParameters + domainParameters + kernelParameters + integrationParameters + simulationParameters + fluidParameters + plotParameters + exportParameters + noiseParameters
+defaultParameters = particleParameters + computeParameters + domainParameters + kernelParameters + integrationParameters + simulationParameters + fluidParameters + plotParameters + exportParameters + noiseParameters + boundaryParameters
 
 def parseComputeInfo(config):
     device = config['compute']['device']
