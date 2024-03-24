@@ -14,3 +14,15 @@ def computeNormalizationMatrices(stateA, stateB, neighborhood, simConfig):
             L, lambdas = pinv2x2(normalizationMatrices)
 
         return L, normalizationMatrices, lambdas
+    
+def computeCovarianceMatrices(stateA, stateB, neighborhood, simConfig):
+    with record_function("[SPH] - Normalization Matrices (nabla x)"):
+        with record_function("[SPH] - Normalization Matrices (Matrix Computation)"):
+            distances = -(neighborhood['distances'] * neighborhood['supports']).view(-1,1) * neighborhood['vectors']
+            normalizationMatrices = sphOperationStates(stateA, stateB, distances, operation = 'gradient', gradientMode = 'difference', neighborhood = neighborhood)
+        return normalizationMatrices
+# with
+        # with record_function("[SPH] - Normalization Matrices (Pseudo-Inverse)"):
+            # L, lambdas = pinv2x2(normalizationMatrices)
+# 
+        # return L, normalizationMatrices, lambdas

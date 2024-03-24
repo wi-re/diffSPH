@@ -20,6 +20,7 @@ fluidParameters = [
 simulationParameters = [
     Parameter('simulation', 'correctArea', bool, False, required = False, export = True),
     Parameter('simulation', 'supportScheme', str, 'symmetric', required = False, export = True),
+    Parameter('simulation', 'densityScheme', str, 'continuity', required = False, export = True),
 ]
 
 integrationParameters = [
