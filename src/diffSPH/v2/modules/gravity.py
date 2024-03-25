@@ -24,7 +24,7 @@ def computeGravity(fluidState, config):
             magnitude = config['gravity']['magnitude']
             return - magnitude**2 * xij * (rij)[:,None] #/ fluidState['fluidDensities'][:,None]
         else:
-            v = fluidState['fluidVelocities']
+            v = fluidState['velocities']
             direction = torch.tensor(config['gravity']['direction'], dtype = fluidState['positions'].dtype, device = fluidState['positions'].device)
             return (direction[:v.shape[1]] * config['gravity']['magnitude']).repeat(v.shape[0], 1)
 

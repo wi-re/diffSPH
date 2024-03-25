@@ -139,16 +139,23 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
         with record_function("[Simulation] - Update Perennial State"):
             # sync perennialState with tempState   
             for k in perennialState.keys():
-                if k not in ['fluid']['velocities', 'fluid']['positions', 'fluid']['densities']:
-                    temp = perennialState[k]
-                    perennialState[k] = tempState[k]
-                    tempState[k] = temp
+                if not isinstance(perennialState[k], dict):
+                    continue
+                for kk in perennialState[k].keys():
+                    if kk not in ['velocities', 'positions', 'densities']:
+                        temp = perennialState[k][kk]
+                        perennialState[k][kk] = tempState[k][kk]
+                        tempState[k][kk] = temp
+                # if k not in ['fluid']['velocities', 'fluid']['positions', 'fluid']['densities']:
+                #     temp = perennialState[k]
+                #     perennialState[k] = tempState[k]
+                #     tempState[k] = temp
             if dxdt is not None:
-                perennialState['fluid_dxdt'] = dxdt 
+                perennialState['fluid']['dxdt'] = dxdt 
             if dudt is not None:
-                perennialState['fluid_dudt'] = dudt 
+                perennialState['fluid']['dudt'] = dudt 
             if drhodt is not None:
-                perennialState['fluid_drhodt'] = drhodt 
+                perennialState['fluid']['drhodt'] = drhodt 
             if 'neighborhood' in tempState['fluid']:
                 del tempState['fluid']['neighborhood']
             if 'neighborhood' in tempState['boundary']:

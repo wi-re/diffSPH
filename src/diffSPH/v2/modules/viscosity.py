@@ -128,7 +128,7 @@ def computeViscosityDeltaSPH_inviscid(stateA, stateB, neighborhood, config):
         if config['diffusion']['pi-switch']:
             pi_ij = torch.where(vr_ij < 0, pi_ij, 0)
 
-        V_j = stateB['masses'][j] / stateA['densities'][j]
+        V_j = stateB['masses'][j] / stateB['densities'][j]
         kq = (V_j * pi_ij).view(-1,1) * neighborhood['gradients']
         return (alpha * stateA['supports'] * config['fluid']['cs'] * config['fluid']['rho0'] / stateA['densities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = stateA['numParticles'])
         # return (alpha * fluidState['fluidSupports'] * config['fluid']['cs'] * config['fluid']['rho0'] / fluidState['densities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = fluidState['numParticles'])

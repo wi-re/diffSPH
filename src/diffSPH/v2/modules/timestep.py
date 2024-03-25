@@ -19,12 +19,12 @@ def computeTimestep(state, config):
         # print(dt_v, dt_c)
 
         # acceleration timestep condition
-        if 'dudt' in state: 
-            dudt = state['dudt']
+        if 'dudt' in state['fluid']: 
+            dudt = state['fluid']['dudt']
             max_accel = torch.max(torch.linalg.norm(dudt[~torch.isnan(dudt)], dim = -1))
             dt_a = 0.25 * torch.sqrt(config['particle']['support'] / (max_accel + 1e-7)) / config['kernel']['kernelScale']
         else:
-            dt_a = config['timestep']['maxDt']
+            dt_a = torch.tensor(config['timestep']['maxDt'], dtype = dt_v.dtype, device = dt_v.device)
 
         dt = config['timestep']['dt']
         new_dt = dt
