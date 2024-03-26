@@ -235,7 +235,7 @@ def sphOperation(
             div = sphDivergence(masses, densities, (grad, grad), neighborhood, kernelGradients, numParticles, type = gradientMode, mode = divergenceMode)
             return div
     
-
+# @torch.jit.script
 def sphOperationStates(stateA, stateB, quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]], neighborhood: dict, operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div'):
     if operation == 'density':
         return sphDensityInterpolation(

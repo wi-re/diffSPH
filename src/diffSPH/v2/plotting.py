@@ -280,7 +280,7 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
     inputQuantity = None
     pos_x = None
     if isinstance(quantity, str):
-        if which == 'fluid':
+        if which == 'fluid' or not config['boundary']['active']:
             inputQuantity = visualizationState['fluid'][quantity]
             pos_x = visualizationState['fluid']['positions']
         elif which == 'boundary':
@@ -291,7 +291,7 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
             pos_x = torch.cat([visualizationState['fluid']['positions'], visualizationState['boundary']['positions']], dim = 0)
     else:
         if isinstance(quantity, tuple):
-            if which == 'fluid':
+            if which == 'fluid' or not config['boundary']['active']:
                 inputQuantity = quantity[0]
                 pos_x = visualizationState['fluid']['positions']
             elif which == 'boundary':
@@ -301,7 +301,7 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
                 inputQuantity = torch.cat([quantity[0], quantity[1]], dim = 0)
                 pos_x = torch.cat([visualizationState['fluid']['positions'], visualizationState['boundary']['positions']], dim = 0)
         else:
-            if which == 'fluid':
+            if which == 'fluid' or not config['boundary']['active']:
                 if inputQuantity.shape[0] != visualizationState['fluid']['numParticles']:
                     raise ValueError('Quantity does not have the same number of particles as the fluid')
                 inputQuantity = quantity[:visualizationState['fluid']['numParticles']]
@@ -366,9 +366,9 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
     scFluid = None
     scBoundary = None
     if not gridVisualization:
-        if which == 'fluid':
+        if which == 'fluid' or not config['boundary']['active']:
             scFluid = axis.scatter(pos_x[:,0].detach().cpu().numpy(), pos_x[:,1].detach().cpu().numpy(), s = s, c = quantity.detach().cpu().numpy(), cmap = cmap, norm = norm)
-            if plotBoth:
+            if plotBoth and config['boundary']['active']:
                 scBoundary = axis.scatter(visualizationState['boundary']['positions'][:,0].detach().cpu().numpy(), visualizationState['boundary']['positions'][:,1].detach().cpu().numpy(), s = s * 5, c = 'black', cmap = cmap, norm = norm, marker = 'x')
         elif which == 'boundary':
             scBoundary = axis.scatter(pos_x[:,0].detach().cpu().numpy(), pos_x[:,1].detach().cpu().numpy(), s = s * 5, c = quantity.detach().cpu().numpy(), cmap = cmap, norm = norm, marker = 'x')
@@ -389,7 +389,7 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
     if cbar:
         ax1_divider = make_axes_locatable(axis)
         cax1 = ax1_divider.append_axes("right", size="4%", pad="1%")
-        cb = fig.colorbar(scFluid if which == 'fluid' or which == 'both' else scBoundary, cax=cax1,orientation='vertical')
+        cb = fig.colorbar(scFluid if which == 'fluid' or which == 'all' else scBoundary, cax=cax1,orientation='vertical')
         cb.ax.tick_params(labelsize=8)
     # if periodicX:
     #     axis.axis('equal')
@@ -482,11 +482,14 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
     s = plotState['size']
     gridVisualization = plotState['mapToGrid']
 
+    scFluid = plotState['plot']
+    scBoundary = plotState['boundaryPlot'] if 'boundaryPlot' in plotState else None
+
     inputQuantity = None
     pos_x = None
     which = plotState['which'] if 'which' in plotState else 'fluid'
     if isinstance(quantity, str):
-        if which == 'fluid':
+        if which == 'fluid' or scBoundary is None:
             inputQuantity = visualizationState['fluid'][quantity]
             pos_x = visualizationState['fluid']['positions']
         elif which == 'boundary':
@@ -497,7 +500,7 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
             pos_x = torch.cat([visualizationState['fluid']['positions'], visualizationState['boundary']['positions']], dim = 0)
     else:
         if isinstance(quantity, tuple):
-            if which == 'fluid':
+            if which == 'fluid' or scBoundary is None:
                 inputQuantity = quantity[0]
                 pos_x = visualizationState['fluid']['positions']
             elif which == 'boundary':
@@ -507,7 +510,7 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
                 inputQuantity = torch.cat([quantity[0], quantity[1]], dim = 0)
                 pos_x = torch.cat([visualizationState['fluid']['positions'], visualizationState['boundary']['positions']], dim = 0)
         else:
-            if which == 'fluid':
+            if which == 'fluid' or scBoundary is None:
                 if inputQuantity.shape[0] != visualizationState['fluid']['numParticles']:
                     raise ValueError('Quantity does not have the same number of particles as the fluid')
                 inputQuantity = quantity[:visualizationState['fluid']['numParticles']]
@@ -576,8 +579,9 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
         # print(plotState['plot'])
         # print(which)
         scFluid = plotState['plot']
+        scBoundary = plotState['boundaryPlot']
         if scFluid is not None:
-            if which == 'fluid':
+            if which == 'fluid' or scBoundary is None:
                 scFluid.set_offsets(pos_x.detach().cpu().numpy())
                 scFluid.set_array(qcpu.numpy())
                 scFluid.set_norm(norm)
@@ -589,7 +593,6 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
                 scFluid.set_offsets(pos_x[:visualizationState['fluid']['numParticles']].detach().cpu().numpy())
                 scFluid.set_array(qcpu[:visualizationState['fluid']['numParticles']].numpy())
                 scFluid.set_norm(norm)
-        scBoundary = plotState['boundaryPlot']
         if scBoundary is not None:
             if which == 'fluid':
                 scBoundary.set_offsets(visualizationState['boundary']['positions'].detach().cpu().numpy())

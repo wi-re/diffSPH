@@ -221,7 +221,7 @@ def stencilFunction(fn, p, stencil, dx, dim, order):
     
     offset_positions = (p[:, None,:] + offsets[None,:,:] * dx).view(-1, p.shape[1])
     # print('offset_positions', offset_positions.shape, offset_positions)
-    functionValues = fn(offset_positions).view(p.shape[0], -1)
+    functionValues = fn(offset_positions.cpu()).to(p.device).view(p.shape[0], -1)
     # print('functionValues', functionValues.shape, functionValues)
     result = torch.sum(stencil * functionValues, dim = -1) / dx**order
 

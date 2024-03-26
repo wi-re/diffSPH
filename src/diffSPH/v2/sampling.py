@@ -104,7 +104,7 @@ from diffSPH.v2.finiteDifference import centralDifferenceStencil, continuousGrad
 def filterParticlesWithSDF(p, sdf, h, threshold = 0.0):
     stencil = centralDifferenceStencil(1, 2)
     stencil = stencil.to(p.device)
-    sdfValues = sdf(p)
+    sdfValues = sdf(p.cpu()).to(p.device)
     mask = sdfValues <= threshold
     masked = p[mask]
     sdfGradient = continuousGradient(sdf, p, stencil, 0.2 * h, 1)
@@ -300,7 +300,7 @@ def sampleVelocityField(noiseState, neighborhood):
     return velocities, divergence
 
 def rampDivergenceFree(positions, noise, sdf_func, offset, d0 = 0.25):
-    sdf = sdf_func(positions)
+    sdf = sdf_func(positions.cpu()).to(positions.device)
 #     r = sdf / d0 /2  + 0.5
     r = (sdf - offset) / d0 / 0.5 - 1
 #     ramped = r * r * (3 - 2 * r)
@@ -315,7 +315,7 @@ def rampDivergenceFree(positions, noise, sdf_func, offset, d0 = 0.25):
 
 
 def rampOrthogonal(positions, noise, sdf_func, offset, d0 = 0.25):
-    sdf = sdf_func(positions)
+    sdf = sdf_func(positions.cpu()).to(positions.device)
 #     r = sdf / d0 /2  + 0.5
     r = (sdf - offset) / d0 
 #     ramped = r * r * (3 - 2 * r)
@@ -454,10 +454,10 @@ def sampleNoise(noiseConfig):
 
 
 
-def sampleVelocityField(noiseState):
-    gradTerm = sphOperationStates(noiseState, noiseState, (noiseState['potential'], noiseState['potential']), 'gradient', 'difference')
+def sampleVelocityField(noiseState, neighborhood):
+    gradTerm = sphOperationStates(noiseState, noiseState, (noiseState['potential'], noiseState['potential']), operation = 'gradient', gradientMode='difference', neighborhood=neighborhood)
     velocities = torch.stack([gradTerm[:,1], -gradTerm[:,0]], dim = -1)
-    divergence = sphOperationStates(noiseState, noiseState, (noiseState['velocities'], noiseState['velocities']), 'divergence')
+    divergence = sphOperationStates(noiseState, noiseState, (noiseState['velocities'], noiseState['velocities']), operation = 'divergence', neighborhood=neighborhood)
     return velocities, divergence
 
 def rampDivergenceFree(positions, noise, sdf_func, offset, d0 = 0.25):
@@ -527,8 +527,8 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = []):
 
     noiseState['neighborhood'] = fluidNeighborhood
     for sdf in sdfs:
-        noiseState['potential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree')
-    noiseState['velocities'], noiseState['divergence'] = sampleVelocityField(noiseState)
+        noiseState['potential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFrees')
+    noiseState['velocities'], noiseState['divergence'] = sampleVelocityField(noiseState,noiseState['neighborhood'])
     mask = torch.ones_like(noiseState['potential'], dtype = torch.bool)
     for sdf_func in sdfs:
         _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
