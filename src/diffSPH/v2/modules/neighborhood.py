@@ -74,7 +74,8 @@ def neighborSearch(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, periodic 
             else:
                 periodicity = periodic
             xij = torch.stack([xij[:,i] if not periodic_i else mod(xij[:,i], minD[i], maxD[i]) for i, periodic_i in enumerate(periodicity)], dim = -1)
-            rij = torch.sqrt((xij**2).sum(-1))
+            # rij = torch.sqrt((xij**2).sum(-1))
+            rij = torch.linalg.norm(xij, dim = -1)
             xij = xij / (rij + 1e-7).view(-1,1)
             rij = rij / hij
         with record_function("NeighborSearch [kernel Computation]"):
@@ -145,7 +146,8 @@ def neighborSearchVerlet(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, per
             else:
                 periodicity = periodic
             xij = torch.stack([xij[:,i] if not periodic_i else mod(xij[:,i], minD[i], maxD[i]) for i, periodic_i in enumerate(periodicity)], dim = -1)
-            rij = torch.sqrt((xij**2).sum(-1))
+            # rij = torch.sqrt((xij**2).sum(-1))
+            rij = torch.linalg.norm(xij, dim = -1)
             xij = xij / (rij + 1e-7).view(-1,1)
             rij = rij / hij
             # rij = torch.clamp(rij, 0, 1)
@@ -242,10 +244,13 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
                 maxDistance = max(distancesA.max(), distancesB.max())
                 minSupport = min(stateA['supports'].min(), stateB['supports'].min())
                 if maxDistance * 2 > (config['neighborhood']['verletScale'] - 1) * minSupport:    
-                    # print('Recomputing neighborhood (maxDistance = ', maxDistance / simulationState['fluidSupports'].min(), ')')
+
+                    # print('Recomputing neighborhood (maxDistance = ', maxDistance / minSupport, ')')
                     i, j, hij = neighborSearchVerlet(stateA['positions'], stateB['positions'], stateA['supports'] * config['neighborhood']['verletScale'], stateB['supports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
                     hij / config['neighborhood']['verletScale']
                     initialPositions = (stateA['positions'].clone(), stateB['positions'].clone())
+                # else:
+                    # print('Reusing prior neighborsearch (maxDistance = ', maxDistance / minSupport, ')')
             else:
                 i, j, hij = neighborSearchVerlet(stateA['positions'], stateB['positions'], stateA['supports'] * config['neighborhood']['verletScale'], stateB['supports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
                 hij / config['neighborhood']['verletScale']
@@ -256,7 +261,8 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
             # print('Recomputing neighborhood (no prior positions)')
             i, j, hij = neighborSearchVerlet(stateA['positions'], stateB['positions'], stateA['supports'] * config['neighborhood']['verletScale'], stateB['supports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])
             hij / config['neighborhood']['verletScale']
-            
+    # else:
+        # print('Recomputing neighborhood (no prior neighborhood)')
     # hij = hij 
     actual_hij = hij / config['neighborhood']['verletScale']
 
@@ -290,7 +296,8 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
         else:
             periodicity = periodic
         xij = torch.stack([xij[:,i] if not periodic_i else mod(xij[:,i], minD[i], maxD[i]) for i, periodic_i in enumerate(periodicity)], dim = -1)
-        rij = torch.sqrt((xij**2).sum(-1))
+        # rij = torch.sqrt((xij**2).sum(-1))
+        rij = torch.linalg.norm(xij, dim = -1)
         xij = xij / (rij + 1e-7).view(-1,1)
         rij = rij / actual_hij
 

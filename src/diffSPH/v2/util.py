@@ -63,26 +63,26 @@ def printState(particleState):
 
 
 def computeStatistics(perennialState, particleState, config, print = False):
-    E_k0 = particleState['E_k']
-    E_k = (0.5 * torch.sum(perennialState['fluidAreas'] * perennialState['fluidDensities'] * torch.linalg.norm(perennialState['fluidVelocities'], dim = 1)**2)).sum().detach().cpu().numpy()
-    if print:
-        print(f'E_k0 = {E_k0:.4g}, E_k = {E_k:.4g}, rel. diff = {(E_k - E_k0)/E_k0:.2%}')
+    # E_k0 = particleState['E_k']
+    # E_k = (0.5 * torch.sum(perennialState['fluidAreas'] * perennialState['fluidDensities'] * torch.linalg.norm(perennialState['fluidVelocities'], dim = 1)**2)).sum().detach().cpu().numpy()
+    # if print:
+        # print(f'E_k0 = {E_k0:.4g}, E_k = {E_k:.4g}, rel. diff = {(E_k - E_k0)/E_k0:.2%}')
 
-    c = perennialState['fluidDensities'] / config['fluid']['rho0'] - 1
+    c = perennialState['fluid']['densities'] / config['fluid']['rho0'] - 1
     maxCompression = c.max().cpu().detach().item()
     minCompression = c.min().cpu().detach().item()
 
     if print:
         print(f'Max compression: {maxCompression*100:.4g}%, min compression: {minCompression*100:.4g}%')
 
-    averageDensity = perennialState['fluidDensities'].mean().cpu().detach().item() / config['fluid']['rho0']
+    averageDensity = perennialState['fluid']['densities'].mean().cpu().detach().item() / config['fluid']['rho0']
     if print:
         print(f'Average density: {averageDensity:.4g}')
     averageCompression = averageDensity - 1
     if print:
         print(f'Average compression: {averageCompression*100:.4g}%')
     if 'fliudShiftAmount' in perennialState:
-        dx = perennialState['fluidShiftAmount']
+        dx = perennialState['fluid']['shiftAmount']
         shiftAmount = torch.linalg.norm(dx, dim = -1)#.max().cpu().detach().item()
         maxShift = shiftAmount.max().cpu().detach().item() /  config['particle']['dx']
         if print:
@@ -95,8 +95,8 @@ def computeStatistics(perennialState, particleState, config, print = False):
 
     dt_c = config['timestep']['CFL'] * config['particle']['support'] / config['fluid']['cs'] / config['kernel']['kernelScale']    
     # print(dt_v, dt_c)
-    if 'fluid_dudt' in perennialState:
-        dudt = perennialState['fluid_dudt']
+    if 'dudt' in perennialState['fluid']:
+        dudt = perennialState['fluid']['dudt']
         max_accel = torch.max(torch.linalg.norm(dudt[~torch.isnan(dudt)], dim = -1))
     else:
         max_accel = 0
@@ -110,17 +110,17 @@ def computeStatistics(perennialState, particleState, config, print = False):
     if print:
         print(f'CFL number: {CFLNumber:.4g}')
 
-    minNeighborCount = perennialState['fluidNumNeighbors'].min().cpu().detach().item()
-    maxNeighborCount = perennialState['fluidNumNeighbors'].max().cpu().detach().item()
+    minNeighborCount = perennialState['fluid']['numNeighbors'].min().cpu().detach().item()
+    maxNeighborCount = perennialState['fluid']['numNeighbors'].max().cpu().detach().item()
     if print:
         print(f'Min neighbors: {minNeighborCount}, max neighbors: {maxNeighborCount}')
 
-    medianNeighborCount = torch.median(perennialState['fluidNumNeighbors']).cpu().detach().item()
+    medianNeighborCount = torch.median(perennialState['fluid']['numNeighbors']).cpu().detach().item()
     if print:
         print(f'Median neighbors: {medianNeighborCount}')
 
     frameStatistics = {
-        'E_k': E_k.item(),
+        # 'E_k': E_k.item(),
         'maxCompression': maxCompression,
         'minCompression': minCompression,
         'averageDensity': averageDensity,

@@ -55,7 +55,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                 if config['boundary']['active']:
                     if boundaryUpdate[1] is not None:
                         perennialState['boundary']['velocities'] += boundaryUpdate[1] * dt
-
+                dxdt, dudt, drhodt = fluidUpdate
                 updateStates(dt, (fluidUpdate, boundaryUpdate), perennialState['fluid'], perennialState['boundary'] if 'boundary' in perennialState else None)
 
         elif scheme == 'explicitEuler':

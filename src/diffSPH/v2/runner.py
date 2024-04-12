@@ -12,7 +12,7 @@ def setupSimulation(particleState, config, stepLimit = 1000, timeLimit = -1):
     perennialState = copy.deepcopy(particleState)
     fig, axis, plotStates = setupInitialPlot(perennialState, particleState, config)
     priorState = None
-    updatePlots(perennialState, particleState, config, plotStates, fig, axis)
+    # updatePlots(perennialState, particleState, config, plotStates, fig, axis)
     
     pbar = tqdm(total=timeLimit if timeLimit > 0 else stepLimit, bar_format = "{desc}: {percentage:.4f}%|{bar}| {n:.4g}/{total_fmt} [{elapsed}<{remaining}] {rate_fmt}{postfix}", leave=False)
 
@@ -34,12 +34,12 @@ def runSimulation(fig, axis, simulationStep, plotStates, priorState, pbar, stats
         perennialState, priorState, *updates = integrate(simulationStep, perennialState, config, previousStep= priorState)
         # Particle shifting
         dx, _ = solveShifting(perennialState, config)
-        perennialState['fluidShiftAmount'] = dx
-        perennialState['fluidPositions'] += dx
+        perennialState['fluid']['shiftAmount'] = dx
+        perennialState['fluid']['positions'] += dx
         # Frame done, update state for next timestep
         perennialState['dt'] = config['timestep']['dt']
-        perennialState['fluidEks'] = (0.5 * perennialState['fluidAreas'] * perennialState['fluidDensities'] * torch.linalg.norm(perennialState['fluidVelocities'], dim = -1)**2)
-        perennialState['E_k'] = perennialState['fluidEks'].sum().detach().cpu().item()
+        perennialState['fluid']['Eks'] = (0.5 * perennialState['fluid']['areas'] * perennialState['fluid']['densities'] * torch.linalg.norm(perennialState['fluid']['velocities'], dim = -1)**2)
+        perennialState['fluid']['E_k'] = perennialState['fluid']['Eks'].sum().detach().cpu().item()
         frameStatistics = computeStatistics(perennialState, particleState, config)
         
         if config['export']['active']:
@@ -67,16 +67,16 @@ def runSimulation(fig, axis, simulationStep, plotStates, priorState, pbar, stats
 
 
 
+        ttime = perennialState['time'] if not isinstance(perennialState['time'], torch.Tensor) else perennialState['time'].cpu().item()
         stats.append(frameStatistics)
         if config['plot']['fps'] > 0:
             if perennialState['time'] > lastUpdate + 1 / config['plot']['fps']:
-                lastUpdate = perennialState['time']
+                lastUpdate = ttime
                 updatePlots(perennialState, particleState, config, plotStates, fig, axis)
         else:
             if perennialState['timestep'] % config['plot']['updateInterval'] == 0:
                 updatePlots(perennialState, particleState, config, plotStates, fig, axis)
 
-        ttime = perennialState['time'] if not isinstance(perennialState['time'], torch.Tensor) else perennialState['time'].cpu().item()
     pbar.close()
     if config['export']['active']:
         f.close()

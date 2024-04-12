@@ -302,17 +302,17 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
                 pos_x = torch.cat([visualizationState['fluid']['positions'], visualizationState['boundary']['positions']], dim = 0)
         else:
             if which == 'fluid' or not config['boundary']['active']:
-                if inputQuantity.shape[0] != visualizationState['fluid']['numParticles']:
+                if quantity.shape[0] != visualizationState['fluid']['numParticles']:
                     raise ValueError('Quantity does not have the same number of particles as the fluid')
                 inputQuantity = quantity[:visualizationState['fluid']['numParticles']]
                 pos_x = visualizationState['fluid']['positions']
             elif which == 'boundary':
-                if inputQuantity.shape[0] != visualizationState['boundary']['numParticles']:
+                if quantity.shape[0] != visualizationState['boundary']['numParticles']:
                     raise ValueError('Quantity does not have the same number of particles as the boundary')
                 inputQuantity = quantity[visualizationState['fluid']['numParticles']:]
                 pos_x = visualizationState['boundary']['positions']
             else:
-                if inputQuantity.shape[0] != visualizationState['fluid']['numParticles'] + visualizationState['boundary']['numParticles']:
+                if quantity.shape[0] != visualizationState['fluid']['numParticles'] + visualizationState['boundary']['numParticles']:
                     raise ValueError('Quantity does not have the same number of particles as the fluid and boundary combined')
                 inputQuantity = quantity
                 pos_x = torch.cat([visualizationState['fluid']['positions'], visualizationState['boundary']['positions']], dim = 0)
@@ -749,9 +749,10 @@ def setupInitialPlot(perennialState, particleState, config):
 
     for plot in config['plot']['plots']:
         axis[plot].set_title(config['plot']['plots'][plot]['title'])
-        plotStates[plot] = visualizeParticles(fig, axis[plot], config, visualizationState, perennialState[config['plot']['plots'][plot]['val']], cbar = config['plot']['plots'][plot]['cbar'], cmap = config['plot']['plots'][plot]['cmap'], scaling = config['plot']['plots'][plot]['scale'], midPoint = config['plot']['plots'][plot]['midPoint'], gridVisualization= config['plot']['plots'][plot]['gridVis'], s = config['plot']['plots'][plot]['size'], mapping = config['plot']['plots'][plot]['mapping'])
+        plotStates[plot] = visualizeParticleQuantity(fig, axis[plot], config, visualizationState, config['plot']['plots'][plot]['val'], cbar = config['plot']['plots'][plot]['cbar'], cmap = config['plot']['plots'][plot]['cmap'], scaling = config['plot']['plots'][plot]['scale'], midPoint = config['plot']['plots'][plot]['midPoint'], gridVisualization= config['plot']['plots'][plot]['gridVis'], s = config['plot']['plots'][plot]['size'], mapping = config['plot']['plots'][plot]['mapping'])
 
-    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['E_k']:.4g} ({(perennialState['E_k'] - particleState['E_k'])/particleState['E_k']:.2%})''')
+    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['fluid']['E_k']:.4g} ({(perennialState['fluid']['E_k'] - particleState['fluid']['E_k'])/particleState['fluid']['E_k']:.2%})''')
+    # fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$)''')
     fig.tight_layout()
     
 
@@ -766,11 +767,13 @@ def exportPlot(perennialState, config, fig):
     fig.savefig(outFolder + 'frame_{:05d}.png'.format(perennialState["timestep"]), dpi = 300)
 
 def updatePlots(perennialState, particleState, config, plotStates, fig, axis):
-    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['E_k']:.4g} ({(perennialState['E_k'] - particleState['E_k'])/particleState['E_k']:.2%})''')
+    # print('Updating plots')
+    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['fluid']['E_k']:.4g} ({(perennialState['fluid']['E_k'] - particleState['fluid']['E_k'])/particleState['fluid']['E_k']:.2%})''')
+    # fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$)''')
 
     visualizationState = prepVisualizationState(perennialState, config)
     for plot in config['plot']['plots']:
-        updatePlot(plotStates[plot], visualizationState, perennialState[config['plot']['plots'][plot]['val']])
+        updatePlot(plotStates[plot], visualizationState, config['plot']['plots'][plot]['val'])
 
     fig.canvas.draw()
     fig.canvas.flush_events()

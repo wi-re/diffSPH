@@ -4,7 +4,7 @@ from diffSPH.v2.util import countUniqueEntries, printState
 from diffSPH.v2.plotting import updatePlot, visualizeParticles, prepVisualizationState
 
 from diffSPH.v2.modules.integration import integrate
-from diffSPH.v2.modules.neighborhood import fluidNeighborSearch
+# from diffSPH.v2.modules.neighborhood import fluidNeighborSearch
 from diffSPH.v2.modules.shifting import solveShifting
 from diffSPH.v2.modules.timestep import computeTimestep
 
@@ -114,7 +114,7 @@ config = {
     'plot':{
     #     'mosaic': '''A''',
     #     'figSize': (6,5.5),
-        'plots': {'A': {'val': 'fluidIndex', 'cbar': True, 'cmap': 'twilight', 'scale': 'lin', 'size': 0.5, 'gridVis' : False, 'title': 'Fluid Index'}},
+        'plots': {'A': {'val': 'index', 'cbar': True, 'cmap': 'twilight', 'scale': 'lin', 'size': 2, 'gridVis' : False, 'title': 'Fluid Index'}},
     #     'export': True,
         'updateInterval': 32*3,
         'namingScheme': name,
@@ -128,6 +128,9 @@ config = {
         'namingScheme': name,
     #     'interval': 1,
     },
+    'boundary':{
+        'active': False
+    }
     # 'simulation':{'timestamp': datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")}
 }
 config = parseDefaultParameters(config)
@@ -186,7 +189,15 @@ sdf = sphere_a
 if args.verbose:
     print('Sampling particles')
 
-particleState, mask = sampleNoisyParticles(config['noise'], config, sdfs = [])
+noiseState, mask = sampleNoisyParticles(config['noise'], config, sdfs = [], randomizeParticles=True)
+
+particleState = {
+    'fluid': noiseState,
+
+    'time': 0.0,
+    'timestep': 0,
+    'dt': config['timestep']['dt'],
+}
 
 priorState = None
 
@@ -195,8 +206,8 @@ if TGV_override:
     if args.verbose:
         print('Overriding with TGV')
     k = args.k * np.pi
-    particleState['fluidVelocities'][:,0] =  u_mag * torch.cos(k * particleState['fluidPositions'][:,0]) * torch.sin(k * particleState['fluidPositions'][:,1])
-    particleState['fluidVelocities'][:,1] = -u_mag * torch.sin(k * particleState['fluidPositions'][:,0]) * torch.cos(k * particleState['fluidPositions'][:,1])
+    particleState['fluid']['velocities'][:,0] =  u_mag * torch.cos(k * particleState['fluid']['positions'][:,0]) * torch.sin(k * particleState['fluidPositions'][:,1])
+    particleState['fluid']['velocities'][:,1] = -u_mag * torch.sin(k * particleState['fluid']['positions'][:,0]) * torch.cos(k * particleState['fluidPositions'][:,1])
 
 # omega = 4
 
@@ -204,21 +215,21 @@ if TGV_override:
 if args.verbose:
     print('Setting initial velocities')
 
-u_max = torch.linalg.norm(particleState['fluidVelocities'], dim = 1).max()
-particleState['fluidVelocities'] = particleState['fluidVelocities'] / u_max * u_mag
+u_max = torch.linalg.norm(particleState['fluid']['velocities'], dim = 1).max()
+particleState['fluid']['velocities'] = particleState['fluid']['velocities'] / u_max * u_mag
 
-Ek0 = 0.5 * particleState['fluidAreas'] * particleState['fluidDensities'] * torch.linalg.norm(particleState['fluidVelocities'], dim = -1)**2
+Ek0 = 0.5 * particleState['fluid']['areas'] * particleState['fluid']['densities'] * torch.linalg.norm(particleState['fluid']['velocities'], dim = -1)**2
 
 targetEK = 3000
 ratio = np.sqrt(targetEK / Ek0.detach().sum().cpu().item())
 # print(f'ratio: {ratio}')
 # particleState['fluidVelocities'] = particleState['fluidVelocities'] * ratio
 
-initialVelocities = particleState['fluidVelocities'].clone()
+initialVelocities = particleState['fluid']['velocities'].clone()
 
 
-particleState['fluidEks'] =  (0.5 * particleState['fluidAreas'] * particleState['fluidDensities'] * torch.linalg.norm(initialVelocities, dim = -1)**2)
-particleState['E_k'] = particleState['fluidEks'].sum().cpu().detach().item()
+particleState['fluid']['Eks'] =  (0.5 * particleState['fluid']['areas'] * particleState['fluid']['densities'] * torch.linalg.norm(initialVelocities, dim = -1)**2)
+particleState['fluid']['E_k'] = particleState['fluid']['Eks'].sum().cpu().detach().item()
 
 perennialState = copy.deepcopy(particleState)
 

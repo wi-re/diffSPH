@@ -65,7 +65,7 @@ def sampleRegular(
     # print(area)
     
     if correctedArea:
-        area, *_ = optimizeArea(area, dx, torch.float64, 'cpu', targetNeighbors, kernel, dim = dim, thresh = 1e-7**2, maxIter = 64)
+        area, *_ = optimizeArea(area, dx.to('cpu'), torch.float64, 'cpu', targetNeighbors, kernel, dim = dim, thresh = 1e-7**2, maxIter = 64)
     ns = [torch.ceil((maxDomain[i] - minDomain[i]) / dx).to(torch.long) for i in range(dim)]
     lins = [torch.linspace(minDomain[i] + dx / 2, maxDomain[i] - dx/2, ns[i]) for i in range(dim)]
     grid = torch.meshgrid(*lins, indexing = 'xy')
@@ -495,8 +495,10 @@ def filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree'):
     else:
         return rampOrthogonal(noiseState['positions'], noiseState['potential'], sdf, offset = config['particle']['dx'] / 2, d0 = noiseState['supports'])
     
+import copy
+from diffSPH.v2.modules.shifting import solveShifting
 
-def sampleNoisyParticles(noiseConfig, config, sdfs = []):
+def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = False):
     particlesA, volumeA = sampleRegular(config['particle']['dx'], config['domain']['dim'], config['domain']['minExtent'], config['domain']['maxExtent'], config['kernel']['targetNeighbors'], config['simulation']['correctArea'], config['kernel']['function'])
     particlesA = particlesA.to(config['compute']['device'])
     volumeA = volumeA.to(config['compute']['device'])
@@ -520,7 +522,68 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = []):
     noiseState['densities'] = particlesA.new_ones(particlesA.shape[0]) * config['fluid']['rho0'] 
     noiseState['velocities'] = particlesA.new_zeros(particlesA.shape[0], config['domain']['dim'])
     noiseState['accelerations'] = particlesA.new_zeros(particlesA.shape[0], config['domain']['dim'])
-    noiseState['potential'] = noiseSimplex.flatten().to(particlesA.device)
+
+    if randomizeParticles:
+        baseShiftingConfig = copy.deepcopy(config['shifting'])
+
+        config['shifting']['solver'] = 'BiCGStab_wJacobi'
+        # config['shifting']['solver'] = 'BiCGStab'
+        config['shifting']['maxIterations'] = 64
+        config['shifting']['freeSurface'] = False
+        config['shifting']['summationDensity'] = False
+        config['shifting']['scheme'] = 'IPS'
+        config['shifting']['maxSolveIter'] = 128
+        config['shifting']['initialization'] = 'zero'
+        config['shifting']['threshold'] = 0.5
+
+        positions = torch.rand(noiseState['positions'].shape, device = noiseState['positions'].device) * 2 - 1
+        shiftState = {
+                'positions': positions,
+                'areas': noiseState['areas'],
+                'densities': noiseState['densities'],\
+                'numParticles': noiseState['numParticles'],
+                'velocities': noiseState['velocities'],
+                'masses': noiseState['masses'],
+                'supports': noiseState['supports'],
+            }
+        dx, states = solveShifting({
+            'fluid':shiftState
+        }, config)
+        shiftState['positions'] = positions + dx
+
+        config['shifting'] = baseShiftingConfig
+
+        x = shiftState['positions'].clone()
+
+        periodic = config['domain']['periodicity']
+        minDomain = config['domain']['minExtent']
+        maxDomain = config['domain']['maxExtent']
+        periodicity = torch.tensor([False] * x.shape[1], dtype = torch.bool).to(x.device)
+        if isinstance(periodic, torch.Tensor):
+            periodicity = periodic
+        if isinstance(periodic, bool):
+            periodicity = torch.tensor([periodic] * x.shape[1], dtype = torch.bool).to(x.device)
+
+        mod_positions = torch.stack([x[:,i] if not periodic_i else torch.remainder(x[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
+        lin_x = (mod_positions[:,0] - minDomain[0]) / (maxDomain[0] - minDomain[0])
+        lin_y = (mod_positions[:,1] - minDomain[1]) / (maxDomain[1] - minDomain[1])
+
+        gridDim = 128 // 2
+        linearIndex = (torch.round(lin_x * gridDim) + torch.round(lin_y * gridDim) * gridDim).to(torch.int32)
+        sortedIndices = torch.argsort(linearIndex)
+        sortedPositions = mod_positions[sortedIndices]
+        shiftState['positions'] = sortedPositions
+
+        noiseNeighbors = neighborSearch(shiftState, noiseState, config)
+
+        noise = noiseSimplex.flatten().to(particlesA.device)
+        noiseState['potential'] = sphOperationStates(noiseState, shiftState, (noise, noise), operation = 'interpolate', neighborhood = noiseNeighbors)
+        noiseState['positions'] = shiftState['positions']
+
+
+
+    else:
+        noiseState['potential'] = noiseSimplex.flatten().to(particlesA.device)
 
 
     fluidNeighborhood = neighborSearch(noiseState, noiseState, config)
