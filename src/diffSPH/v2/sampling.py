@@ -497,6 +497,7 @@ def filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree'):
     
 import copy
 from diffSPH.v2.modules.shifting import solveShifting
+from diffSPH.v2.util import printState
 
 def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = False):
     particlesA, volumeA = sampleRegular(config['particle']['dx'], config['domain']['dim'], config['domain']['minExtent'], config['domain']['maxExtent'], config['kernel']['targetNeighbors'], config['simulation']['correctArea'], config['kernel']['function'])
@@ -589,6 +590,7 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
     fluidNeighborhood = neighborSearch(noiseState, noiseState, config)
 
     noiseState['neighborhood'] = fluidNeighborhood
+    # printState(noiseState)
     for sdf in sdfs:
         noiseState['potential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFrees')
     noiseState['velocities'], noiseState['divergence'] = sampleVelocityField(noiseState,noiseState['neighborhood'])

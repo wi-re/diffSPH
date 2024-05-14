@@ -1,4 +1,4 @@
-conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+install conda pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
 pip install tqdm seaborn pandas matplotlib numpy tomli msgpack msgpack-numpy portalocker h5py zstandard ipykernel ipympl torchCompactRadius scipy scikit-image scikit-learn numba
 pip install scipy scikit-image scikit-learn
 pip install numba

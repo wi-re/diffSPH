@@ -210,8 +210,8 @@ if TGV_override:
     if args.verbose:
         print('Overriding with TGV')
     k = args.k * np.pi
-    particleState['fluid']['velocities'][:,0] =  u_mag * torch.cos(k * particleState['fluid']['positions'][:,0]) * torch.sin(k * particleState['fluidPositions'][:,1])
-    particleState['fluid']['velocities'][:,1] = -u_mag * torch.sin(k * particleState['fluid']['positions'][:,0]) * torch.cos(k * particleState['fluidPositions'][:,1])
+    particleState['fluid']['velocities'][:,0] =  u_mag * torch.cos(k * particleState['fluid']['positions'][:,0]) * torch.sin(k * particleState['fluid']['positions'][:,1])
+    particleState['fluid']['velocities'][:,1] = -u_mag * torch.sin(k * particleState['fluid']['positions'][:,0]) * torch.cos(k * particleState['fluid']['positions'][:,1])
 
 # omega = 4
 
