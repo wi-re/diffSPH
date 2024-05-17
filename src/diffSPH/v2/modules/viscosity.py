@@ -205,12 +205,32 @@ def computeViscosity(stateA, stateB, neighborhood, config):
 
 from diffSPH.parameter import Parameter
 
+
 def computeViscosityParameter(particleState, config):      
     nu_sph = config['diffusion']['alpha'] * config['fluid']['cs'] * config['particle']['support']  / (2 * (config['domain']['dim'] + 2)) * 5/4
     nu_sph = config['diffusion']['nu'] if config['diffusion']['velocityScheme'] == 'deltaSPH_viscid' else nu_sph
     return nu_sph
 
+def setViscosityParameters(config, targetRe, L, u_mag):
+    if config['diffusion']['velocityScheme'] == 'deltaSPH_inviscid':
+        nu_sph = config['diffusion']['alpha'] * config['fluid']['cs'] * config['particle']['support']   / (2 * (config['domain']['dim'] + 2)) * 5/4
+        Re = u_mag * (2 * L) / config['diffusion']['nu_sph']
 
+        target_nu = u_mag * (2 * L) / targetRe
+        alpha = target_nu / (config['fluid']['cs'] * config['particle']['support']  / (2 * (config['domain']['dim'] + 2)) * 5/4) #/ config['kernel']['kernelScale']
+        config['diffusion']['alpha'] = alpha
+        # print(alpha)
+        if alpha < 0.01:
+            print(rf'$\alpha = {alpha}$ is very low, consider increasing the value (should be > 0.01)')
+    elif config['diffusion']['velocityScheme'] == 'deltaSPH_viscid':
+        nu_sph = config['diffusion']['nu']
+        Re = u_mag * (2 * L) / config['diffusion']['nu']
+        target_nu = u_mag * (2 * L) / targetRe
+        config['diffusion']['nu'] = target_nu
+
+
+    config['diffusion']['nu_sph'] = computeViscosityParameter(None, config)# * config['kernel']['kernelScale']
+    config['diffusion']['Re'] = u_mag * (2 * L) / config['diffusion']['nu_sph']
 
 def getParameters():
     return [

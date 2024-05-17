@@ -3,6 +3,7 @@ from diffSPH.v2.sdf import getSDF, sdfFunctions, operatorDict
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import torch
 
@@ -276,9 +277,10 @@ def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhoo
     return visualizationState
 
 from typing import Union, Tuple
-def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: Union[str, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]], mapping = '.x', cbar = True, cmap = 'viridis', scaling = 'lin', s = 4, linthresh = 0.5, midPoint = 0, gridVisualization = False, which = 'fluid', plotBoth = True):  
+def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: Union[str, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]], mapping = '.x', cbar = True, cmap = 'viridis', scaling = 'lin', s = 4, linthresh = 0.5, midPoint = 0, gridVisualization = False, which = 'fluid', plotBoth = True, operation = None, streamLines = False, title = None):  
     inputQuantity = None
     pos_x = None
+
     if isinstance(quantity, str):
         if which == 'fluid' or not config['boundary']['active']:
             inputQuantity = visualizationState['fluid'][quantity]
@@ -318,6 +320,23 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
                 pos_x = torch.cat([visualizationState['fluid']['positions'], visualizationState['boundary']['positions']], dim = 0)
 
     setPlotBaseAttributes(axis, config)
+    if title is not None:
+        axis.set_title(title)
+
+    if operation is not None:
+        initialQuantity = inputQuantity.clone()
+        if which == 'fluid' or not config['boundary']['active']:
+            inputQuantity = sphOperationStates(visualizationState['fluid'], visualizationState['fluid'], (inputQuantity, inputQuantity), operation = operation, neighborhood = visualizationState['fluid']['neighborhood'])
+        elif which == 'boundary':
+            inputQuantity = sphOperationStates(visualizationState['boundary'], visualizationState['boundary'], (inputQuantity, inputQuantity), operation = operation, neighborhood = visualizationState['boundary']['neighborhood'])
+        else:
+            numFluid = visualizationState['fluid']['numParticles']
+            inputQuantityF = sphOperationStates(visualizationState['fluid'], visualizationState['fluid'], (inputQuantity[:numFluid], inputQuantity[:numFluid]), operation = operation, neighborhood = visualizationState['fluid']['neighborhood'])
+            inputQuantityB = sphOperationStates(visualizationState['boundary'], visualizationState['boundary'], (inputQuantity[numFluid:], inputQuantity[numFluid:]), operation = operation, neighborhood = visualizationState['boundary']['neighborhood'])
+            inputQuantity = torch.cat([inputQuantityF, inputQuantityB], dim = 0)
+
+
+
     if len(inputQuantity.shape) == 2:
         # Non scalar quantity
         if mapping == '.x' or mapping == '[0]':
@@ -385,6 +404,17 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
         X = visualizationState['X']
         Y = visualizationState['Y']
         scFluid = axis.pcolormesh(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), gridDensity.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), cmap = cmap, norm = norm)
+
+        if streamLines:
+            if operation is not None and len(quantity.shape) != 2:
+                inputQuantity = initialQuantity
+            grid_ux = mapToGrid(visualizationState, inputQuantity[:,0])
+            grid_uy = mapToGrid(visualizationState, inputQuantity[:,1])
+            X = visualizationState['X']
+            Y = visualizationState['Y']
+
+            stream = axis.streamplot(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), grid_ux.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), grid_uy.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), color='k', linewidth=1, density=1, arrowstyle='->', arrowsize=0.5)
+
         
     if cbar:
         ax1_divider = make_axes_locatable(axis)
@@ -398,7 +428,7 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
     # else:
     #     axis.set_aspect('equal', 'box')
 
-    return {'plot': scFluid, 'boundaryPlot': scBoundary, 'cbar': cb if cbar else None, 'mapping': mapping, 'colormap': cmap, 'scale': scaling, 'size':4, 'mapToGrid': gridVisualization, 'midPoint' : midPoint, 'linthresh': linthresh, 'which': which, 'plotBoth': plotBoth, 'quantity': quantity}
+    return {'plot': scFluid, 'boundaryPlot': scBoundary, 'cbar': cb if cbar else None, 'mapping': mapping, 'colormap': cmap, 'scale': scaling, 'size':4, 'mapToGrid': gridVisualization, 'midPoint' : midPoint, 'linthresh': linthresh, 'which': which, 'plotBoth': plotBoth, 'quantity': quantity, 'operation': operation, 'streamLines': streamLines, 'streamPlot': stream if streamLines and gridVisualization else None, 'axis': axis}
 
 def visualizeParticles(fig, axis, config, visualizationState, inputQuantity, mapping = '.x', cbar = True, cmap = 'viridis', scaling = 'lin', s = 4, linthresh = 0.5, midPoint = 0, gridVisualization = False):        
     # print(inputQuantity.shape)
@@ -528,6 +558,20 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
     # else:
     #     pos_x = visualizationState['fluid']['positions']
 
+    operation = plotState['operation'] if 'operation' in plotState else None
+    if operation is not None:
+        initialQuantity = inputQuantity
+        if which == 'fluid' or scBoundary is None:
+            inputQuantity = sphOperationStates(visualizationState['fluid'], visualizationState['fluid'], (inputQuantity, inputQuantity), operation = operation, neighborhood = visualizationState['fluid']['neighborhood'])
+        elif which == 'boundary':
+            inputQuantity = sphOperationStates(visualizationState['boundary'], visualizationState['boundary'], (inputQuantity, inputQuantity), operation = operation, neighborhood = visualizationState['boundary']['neighborhood'])
+        else:
+            numFluid = visualizationState['fluid']['numParticles']
+            inputQuantityF = sphOperationStates(visualizationState['fluid'], visualizationState['fluid'], (inputQuantity[:numFluid], inputQuantity[:numFluid]), operation = operation, neighborhood = visualizationState['fluid']['neighborhood'])
+            inputQuantityB = sphOperationStates(visualizationState['boundary'], visualizationState['boundary'], (inputQuantity[numFluid:], inputQuantity[numFluid:]), operation = operation, neighborhood = visualizationState['boundary']['neighborhood'])
+            inputQuantity = torch.cat([inputQuantityF, inputQuantityB], dim = 0)
+
+
     if len(inputQuantity.shape) == 2:
         # Non scalar quantity
         if mapping == '.x' or mapping == '[0]':
@@ -619,10 +663,36 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
         # sc = axis.scatter(pos_x[:,0].detach().cpu().numpy(), pos_x[:,1].detach().cpu().numpy(), s = s, c = quantity.detach().cpu().numpy(), cmap = cmap, norm = norm)
     else:
         sc = plotState['plot']
-        gridDensity = mapToGrid(visualizationState, quantity)
+        gridDensity = mapToGrid(visualizationState, quantityDevice)
         sc.set_array(gridDensity.detach().cpu().numpy())
         sc.set_norm(norm)
-        # sc = axis.pcolormesh(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), gridDensity.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), cmap = cmap, norm = norm)
+
+        if plotState['streamLines']:
+            if operation is not None and len(quantityDevice.shape) != 2:
+                inputQuantity = initialQuantity
+            # else:
+                # inputQuantity = quantityDevice
+            axis = plotState['axis']
+            grid_ux = mapToGrid(visualizationState, inputQuantity[:,0])
+            grid_uy = mapToGrid(visualizationState, inputQuantity[:,1])
+            X = visualizationState['X']
+            Y = visualizationState['Y']
+            priorStream = plotState['streamPlot']
+            # ax = axis
+            # keep = lambda x: not isinstance(x, mpl.patches.FancyArrowPatch)
+            # axis.patches = [patch for patch in axis.patches if keep(patch)]
+
+
+            priorStream.lines.remove()  # Removes the stream lines
+            priorStream.arrows.set_visible(False)  # Does nothing
+            # priorStream.arrows.remove()  # Raises NotImplementedError
+            for art in axis.get_children():
+                if not isinstance(art, matplotlib.patches.FancyArrowPatch):
+                    continue
+                art.remove()        # Method 1
+
+            plotState['streamPlot'] = axis.streamplot(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), grid_ux.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), grid_uy.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), color='k', linewidth=1, density=1, arrowstyle='->', arrowsize=0.5)
+            # sc = axis.pcolormesh(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), gridDensity.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), cmap = cmap, norm = norm)
     
 
 from diffSPH.v2.plotting import mapToGrid
@@ -749,7 +819,7 @@ def setupInitialPlot(perennialState, particleState, config):
 
     for plot in config['plot']['plots']:
         axis[plot].set_title(config['plot']['plots'][plot]['title'])
-        plotStates[plot] = visualizeParticleQuantity(fig, axis[plot], config, visualizationState, config['plot']['plots'][plot]['val'], cbar = config['plot']['plots'][plot]['cbar'], cmap = config['plot']['plots'][plot]['cmap'], scaling = config['plot']['plots'][plot]['scale'], midPoint = config['plot']['plots'][plot]['midPoint'], gridVisualization= config['plot']['plots'][plot]['gridVis'], s = config['plot']['plots'][plot]['size'], mapping = config['plot']['plots'][plot]['mapping'])
+        plotStates[plot] = visualizeParticleQuantity(fig, axis[plot], config, visualizationState, **config['plot']['plots'][plot])
 
     fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['fluid']['E_k']:.4g} ({(perennialState['fluid']['E_k'] - particleState['fluid']['E_k'])/particleState['fluid']['E_k']:.2%})''')
     # fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$)''')
@@ -766,14 +836,15 @@ def exportPlot(perennialState, config, fig):
     os.makedirs(outFolder, exist_ok = True)
     fig.savefig(outFolder + 'frame_{:05d}.png'.format(perennialState["timestep"]), dpi = 300)
 
-def updatePlots(perennialState, particleState, config, plotStates, fig, axis):
+def updatePlots(perennialState, particleState, config, plotStates, fig, axis, title = None):
     # print('Updating plots')
-    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['fluid']['E_k']:.4g} ({(perennialState['fluid']['E_k'] - particleState['fluid']['E_k'])/particleState['fluid']['E_k']:.2%})''')
+    if title is None:
+        fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$''')
     # fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$)''')
 
     visualizationState = prepVisualizationState(perennialState, config)
     for plot in config['plot']['plots']:
-        updatePlot(plotStates[plot], visualizationState, config['plot']['plots'][plot]['val'])
+        updatePlot(plotStates[plot], visualizationState, config['plot']['plots'][plot]['quantity'])
 
     fig.canvas.draw()
     fig.canvas.flush_events()

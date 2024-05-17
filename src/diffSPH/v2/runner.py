@@ -20,7 +20,7 @@ def setupSimulation(particleState, config, stepLimit = 1000, timeLimit = -1):
 
     return perennialState, fig, axis, plotStates, priorState, pbar, stats
 
-def runSimulation(fig, axis, simulationStep, plotStates, priorState, pbar, stats, perennialState, particleState, config, stepLimit = 1000, timeLimit = -1):
+def runSimulation(fig, axis, simulationStep, plotStates, priorState, pbar, stats, perennialState, particleState, config, stepLimit = 1000, timeLimit = -1, callBack = None):
     # for i in tqdm(range(1000)):
     frameStatistics = computeStatistics(perennialState, particleState, config)
     stats.append(frameStatistics)
@@ -69,13 +69,16 @@ def runSimulation(fig, axis, simulationStep, plotStates, priorState, pbar, stats
 
         ttime = perennialState['time'] if not isinstance(perennialState['time'], torch.Tensor) else perennialState['time'].cpu().item()
         stats.append(frameStatistics)
+        if callBack is not None:
+            callBack(perennialState, particleState, config, plotStates, fig, axis, frameStatistics)
+            
         if config['plot']['fps'] > 0:
             if perennialState['time'] > lastUpdate + 1 / config['plot']['fps']:
                 lastUpdate = ttime
-                updatePlots(perennialState, particleState, config, plotStates, fig, axis)
+                updatePlots(perennialState, particleState, config, plotStates, fig, axis, title = callBack)
         else:
             if perennialState['timestep'] % config['plot']['updateInterval'] == 0:
-                updatePlots(perennialState, particleState, config, plotStates, fig, axis)
+                updatePlots(perennialState, particleState, config, plotStates, fig, axis, title = callBack)
 
     pbar.close()
     if config['export']['active']:

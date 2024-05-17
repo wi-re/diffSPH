@@ -194,9 +194,9 @@ def parseDefaultParameters(config):
     config['particle']['smoothingLength'] = 2 * config['particle']['dx']
     config['noise']['n'] = config['particle']['nx']
 
-    for plot in config['plot']['plots']:
-        for parameter in plotStateDict:
-            parameter.parseConfig(config['plot']['plots'][plot])
+    # for plot in config['plot']['plots']:
+        # for parameter in plotStateDict:
+            # parameter.parseConfig(config['plot']['plots'][plot])
 
     config['simulation']['timestamp'] = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
     return config
