@@ -451,6 +451,8 @@ def solveShifting(simulationState, config):
             'numParticles': mergedPositions.shape[0],
             'boundaryMarker': boundaryMarker
         }
+        if 'neighborhood' in simulationState['fluid']:
+            particleState['neighborhood'] = simulationState['fluid']['neighborhood']
 
 
         initialPositions = torch.clone(particleState['positions'])
@@ -541,5 +543,9 @@ def solveShifting(simulationState, config):
         simulationState['fluid']['positions'] = particleState['positions'][:numParticles]
         simulationState['fluid']['densities'] = particleState['densities'][:numParticles]
         dx = dx[:numParticles]
+
+        if 'neighborhood' in simulationState['fluid']:
+            if 'boundary' not in simulationState:
+                simulationState['fluid']['neighborhood'] = particleState['neighborhood']
 
         return dx, overallStates

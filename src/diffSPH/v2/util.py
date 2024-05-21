@@ -101,10 +101,10 @@ def computeStatistics(perennialState, particleState, config, print = False):
     else:
         max_accel = 0
 
-    dt_a = 0.25 * torch.sqrt(config['particle']['support'] / (max_accel + 1e-7)) / config['kernel']['kernelScale']
+    # dt_a = 0.25 * torch.sqrt(config['particle']['support'] / (max_accel + 1e-7)) / config['kernel']['kernelScale']
 
-    if print:
-        print(f'dt_v = {dt_v:.4g}, dt_c = {dt_c:.4g}, dt_a = {dt_a:.4g}')
+    # if print:
+        # print(f'dt_v = {dt_v:.4g}, dt_c = {dt_c:.4g}, dt_a = {dt_a:.4g}')
 
     CFLNumber = config['timestep']['dt'] / (config['particle']['support'] / config['fluid']['cs'] / config['kernel']['kernelScale'])
     if print:
@@ -128,7 +128,7 @@ def computeStatistics(perennialState, particleState, config, print = False):
         'maxShift': maxShift.cpu().detach().item(),
         'dt_v': dt_v.cpu().detach().item(),
         'dt_c': dt_c.cpu().detach().item(),
-        'dt_a': dt_a.cpu().detach().item(),
+        # 'dt_a': dt_a.cpu().detach().item(),
         'CFLNumber': CFLNumber.cpu().detach().item(),
         'minNeighborCount': minNeighborCount,
         'maxNeighborCount': maxNeighborCount,

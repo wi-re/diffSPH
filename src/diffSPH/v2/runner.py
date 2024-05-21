@@ -8,17 +8,19 @@ from diffSPH.v2.modules.shifting import solveShifting
 from diffSPH.v2.modules.timestep import computeTimestep
 import copy
 
-def setupSimulation(particleState, config, stepLimit = 1000, timeLimit = -1):
-    perennialState = copy.deepcopy(particleState)
-    fig, axis, plotStates = setupInitialPlot(perennialState, particleState, config)
+def setupSimulation(particleState, config, stepLimit = 1000, timeLimit = -1, copyState = False):
+    if copyState:
+        perennialState = copy.deepcopy(particleState)
+    fig, axis, plotStates = setupInitialPlot(particleState, particleState, config)
     priorState = None
     # updatePlots(perennialState, particleState, config, plotStates, fig, axis)
     
     pbar = tqdm(total=timeLimit if timeLimit > 0 else stepLimit, bar_format = "{desc}: {percentage:.4f}%|{bar}| {n:.4g}/{total_fmt} [{elapsed}<{remaining}] {rate_fmt}{postfix}", leave=False)
 
     stats = []
-
-    return perennialState, fig, axis, plotStates, priorState, pbar, stats
+    if copyState:
+        return perennialState, fig, axis, plotStates, priorState, pbar, stats
+    return particleState, fig, axis, plotStates, priorState, pbar, stats
 
 def runSimulation(fig, axis, simulationStep, plotStates, priorState, pbar, stats, perennialState, particleState, config, stepLimit = 1000, timeLimit = -1, callBack = None):
     # for i in tqdm(range(1000)):
@@ -31,11 +33,14 @@ def runSimulation(fig, axis, simulationStep, plotStates, priorState, pbar, stats
         
     lastUpdate = perennialState['time']
     while(True):
+        # print('Integrating')
         perennialState, priorState, *updates = integrate(simulationStep, perennialState, config, previousStep= priorState)
         # Particle shifting
+        # print('Solving shifting')
         dx, _ = solveShifting(perennialState, config)
         perennialState['fluid']['shiftAmount'] = dx
         perennialState['fluid']['positions'] += dx
+        # print('Computing timestep')
         # Frame done, update state for next timestep
         perennialState['dt'] = config['timestep']['dt']
         perennialState['fluid']['Eks'] = (0.5 * perennialState['fluid']['areas'] * perennialState['fluid']['densities'] * torch.linalg.norm(perennialState['fluid']['velocities'], dim = -1)**2)
@@ -71,7 +76,7 @@ def runSimulation(fig, axis, simulationStep, plotStates, priorState, pbar, stats
         stats.append(frameStatistics)
         if callBack is not None:
             callBack(perennialState, particleState, config, plotStates, fig, axis, frameStatistics)
-            
+
         if config['plot']['fps'] > 0:
             if perennialState['time'] > lastUpdate + 1 / config['plot']['fps']:
                 lastUpdate = ttime

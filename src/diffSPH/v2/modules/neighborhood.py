@@ -256,7 +256,7 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
                 hij / config['neighborhood']['verletScale']
                 initialPositions = (stateA['positions'].clone(), stateB['positions'].clone())
             # else:
-                # print('Reusing prior neighborsearch (maxDistance = ', maxDistance / simulationState['fluidSupports'].min(), ')')
+                # print('Recomputing neighborsearch (invalid configuration)')
         else:
             # print('Recomputing neighborhood (no prior positions)')
             i, j, hij = neighborSearchVerlet(stateA['positions'], stateB['positions'], stateA['supports'] * config['neighborhood']['verletScale'], stateB['supports'] * config['neighborhood']['verletScale'], kernel = config['kernel']['function'], dim = config['domain']['dim'], periodic = config['domain']['periodicity'], minDomain = config['domain']['minExtent'], maxDomain = config['domain']['maxExtent'], algorithm = config['neighborhood']['scheme'], mode = config['simulation']['supportScheme'])

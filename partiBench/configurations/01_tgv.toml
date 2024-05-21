@@ -23,7 +23,7 @@ velocityScheme = 'deltaSPH_inviscid'
 mosaic = 'AB'
 figSize = [10, 5.5]
 fps = 0
-updateInterval = 64
+updateInterval = 8
 
 [plot.plots]
 [plot.plots.A]

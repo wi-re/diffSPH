@@ -47,6 +47,8 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
         fluidUpdate, boundaryUpdate = None, None
 
         tempState = copy.deepcopy(perennialState)
+        if 'neighborhood' in perennialState['fluid']:
+            del perennialState['fluid']['neighborhood']
         if scheme == 'semiImplicitEuler':
             with record_function("[Simulation] - Semi-Implicit Euler"):
                 fluidUpdate, boundaryUpdate = simulationStep(tempState, config)
@@ -143,29 +145,43 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
         elif scheme == 'RK4':
             with record_function("[Simulation] - RK4"):
                 with record_function("[Simulation] - RK4 - k1"):
+                    # print("RK4 - k1")
                     # Compute k1
                     fluidUpdate_k1, boundaryUpdate_k1 = simulationStep(tempState, config)
 
-                    
+                    neighborhood = tempState['fluid']['neighborhood'] if 'neighborhood' in tempState['fluid'] else None
                     tempState = copy.deepcopy(perennialState)
+                    tempState['fluid']['neighborhood'] = neighborhood
+                    del neighborhood
                     updateStates(dt / 2, (fluidUpdate_k1, boundaryUpdate_k1), tempState['fluid'], tempState['boundary'] if 'boundary' in tempState else None)
                     # tempState['fluid']['positions'] += perennialState['fluid']['velocities'] * dt / 2
                 with record_function("[Simulation] - RK4 - k2"):
+                    # print("RK4 - k2")
                     # Compute k2
                     fluidUpdate_k2, boundaryUpdate_k2 = simulationStep(tempState, config)
+
+                    neighborhood = tempState['fluid']['neighborhood'] if 'neighborhood' in tempState['fluid'] else None
                     tempState = copy.deepcopy(perennialState)
+                    tempState['fluid']['neighborhood'] = neighborhood
+                    del neighborhood
                     updateStates(dt / 2, (fluidUpdate_k2, boundaryUpdate_k2), tempState['fluid'], tempState['boundary'] if 'boundary' in tempState else None)
                     # tempState['fluid']['positions'] += (perennialState['fluid']['velocities'] + dudt_k2 * dt / 2) * dt / 2
                 with record_function("[Simulation] - RK4 - k3"):
+                    # print("RK4 - k3")
                     # Compute k3
                     fluidUpdate_k3, boundaryUpdate_k3 = simulationStep(tempState, config)
+                    neighborhood = tempState['fluid']['neighborhood'] if 'neighborhood' in tempState['fluid'] else None
                     tempState = copy.deepcopy(perennialState)
+                    tempState['fluid']['neighborhood'] = neighborhood
+                    del neighborhood
                     updateStates(dt, (fluidUpdate_k3, boundaryUpdate_k3), tempState['fluid'], tempState['boundary'] if 'boundary' in tempState else None)
                     # tempState['fluid']['positions'] += (perennialState['fluid']['velocities'] + dudt_k3 * dt / 2) * dt
                 with record_function("[Simulation] - RK4 - k4"):
+                    # print("RK4 - k4")
                     # Compute k4
                     fluidUpdate_k4, boundaryUpdate_k4 = simulationStep(tempState, config)
                 with record_function("[Simulation] - RK4 - Update"):
+                    # print("RK4 - update")
                     # Update the position and velocity
                     dxdt, dudt, drhodt = None, None, None
                     if fluidUpdate_k1[0] is not None:
@@ -208,6 +224,8 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                 #     temp = perennialState[k]
                 #     perennialState[k] = tempState[k]
                 #     tempState[k] = temp
+            if 'neighborhood' in tempState['fluid']:
+                perennialState['fluid']['neighborhood'] = tempState['fluid']['neighborhood']
             if fluidUpdate[0] is not None:
                 perennialState['fluid']['dxdt'] = fluidUpdate[0] 
             if fluidUpdate[1] is not None:
@@ -228,7 +246,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                 del tempState['boundary']['neighborhood']
             if 'neighborhood' in tempState:
                 del tempState['neighborhood']
-
+        # print("RK4 - done")
         return perennialState, tempState, dxdt, dudt, drhodt
 
 
