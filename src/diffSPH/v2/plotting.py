@@ -202,6 +202,8 @@ from diffSPH.v2.modules.neighborhood import neighborSearch
 from diffSPH.kernels import getKernel
 from diffSPH.v2.sphOps import sphOperationStates, sphOperation
 import copy
+from diffSPH.v2.util import printState
+
 
 def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhood = True, grid = True):
     visualizationState = copy.deepcopy(perennialState)
@@ -261,11 +263,14 @@ def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhoo
             },
             'neighborhood':{
                 'algorithm': 'compact',
+                'scheme': 'compact',
+                'verletScale': 1.0
             },
             'kernel': config['kernel']
         }
         gridConfig['simulation']['supportScheme'] = 'scatter'
-        visualizationState['gridNeighborhood'] = neighborSearch(gridState, visualizationState['fluid'], config) #0, perennialState['fluid']['supports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
+        # printState(gridState)
+        visualizationState['gridNeighborhood'] = neighborSearch(gridState, visualizationState['fluid'], gridConfig) #0, perennialState['fluid']['supports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
         # visualizationState['gridNeighborhood'] = {}
         # visualizationState['gridNeighborhood']['indices'] = (i, j)
         # visualizationState['gridNeighborhood']['distances'] = rij
@@ -823,8 +828,8 @@ def setupInitialPlot(perennialState, particleState, config):
         axis[plot].set_title(config['plot']['plots'][plot]['title'])
         plotStates[plot] = visualizeParticleQuantity(fig, axis[plot], config, visualizationState, **config['plot']['plots'][plot])
 
-    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['fluid']['E_k']:.4g} ({(perennialState['fluid']['E_k'] - particleState['fluid']['E_k'])/particleState['fluid']['E_k']:.2%})''')
-    # fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$)''')
+    # fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$, EK = {perennialState['fluid']['E_k']:.4g} ({(perennialState['fluid']['E_k'] - particleState['fluid']['E_k'])/particleState['fluid']['E_k']:.2%})''')
+    fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$)''')
     fig.tight_layout()
 
     print('Done setting up initial plot')

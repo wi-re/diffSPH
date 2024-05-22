@@ -11,10 +11,10 @@ periodic = true
 scheme = 'deltaSPH'
 threshold = 0.05
 maxIterations = 1
-freeSurface = false
+freeSurface = true
 
 [sps]
-active = true
+active = false
 
 [diffusion]
 velocityScheme = 'deltaSPH_inviscid'
