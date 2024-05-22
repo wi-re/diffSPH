@@ -306,7 +306,7 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
         xij = xij[mask,:]
         iFiltered = i[mask]
         jFiltered = j[mask]
-        hijFiltered = actual_hij[iFiltered]
+        hijFiltered = actual_hij[mask]
 
         # rij = torch.clamp(rij, 0, 1)
     if computeKernels:
