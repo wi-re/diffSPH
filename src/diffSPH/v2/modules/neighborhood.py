@@ -209,7 +209,7 @@ def neighborSearchVerlet(x, y, hx, hy : Optional[torch.Tensor], kernel, dim, per
 
 #     return i, j, rij_normed, xij_normed, hij
 
-
+from diffSPH.v2.util import countUniqueEntries
 from torch.profiler import record_function
 def neighborSearch(stateA: dict, stateB : dict, config: dict, computeKernels = True, priorNeighborhood = None):
     if priorNeighborhood is not None:
@@ -308,6 +308,9 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
         jFiltered = j[mask]
         hijFiltered = actual_hij[mask]
 
+    numNeighbors = countUniqueEntries(iFiltered, pos_x)[1].to(torch.int32)
+    neighborOffsets = torch.hstack((torch.tensor([0], dtype = torch.int32, device = numNeighbors.device), torch.cumsum(numNeighbors, dim = 0).to(torch.int32)))[:-1]
+
         # rij = torch.clamp(rij, 0, 1)
     if computeKernels:
         with record_function("NeighborSearch [kernel Computation]"):
@@ -323,7 +326,9 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
             'fullSupports': hij,
             'kernels': Wij,
             'gradients': gradWij,
-            'initialPositions': initialPositions
+            'initialPositions': initialPositions,
+            'numNeighbors': numNeighbors,
+            'neighborOffsets': neighborOffsets,
         }
     else:
         neighborDict = {
@@ -333,7 +338,9 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
             'vectors': xij,
             'supports': hijFiltered,
             'fullSupports': hij,
-            'initialPositions': initialPositions
+            'initialPositions': initialPositions,
+            'numNeighbors': numNeighbors,
+            'neighborOffsets': neighborOffsets,
         }
     return neighborDict
 

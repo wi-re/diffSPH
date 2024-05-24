@@ -244,6 +244,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                 del tempState['fluid']['neighborhood']
             if 'boundary' in tempState and 'neighborhood' in tempState['boundary']:
                 del tempState['boundary']['neighborhood']
+                perennialState['boundary']['densities'] = tempState['boundary']['densities']
             if 'neighborhood' in tempState:
                 del tempState['neighborhood']
         # print("RK4 - done")

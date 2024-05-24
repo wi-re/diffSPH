@@ -18,5 +18,6 @@ def computePressureAccelSwitch(stateA, stateB, neighborhood, config):
         p_i = stateA['pressures'][i]
         p_j = stateB['pressures'][j]
         p_ij = torch.where(torch.logical_or(p_i >= 0, stateA['surfaceMask'][i] > 0.5), p_j + p_i, p_j - p_i)
+        p_ij = p_j + p_i
 
         return -sphOperationStates(stateA, stateB, p_ij, operation = 'gradient', gradientMode='summation') / stateA['densities'].view(-1,1)

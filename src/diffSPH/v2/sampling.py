@@ -413,6 +413,7 @@ def sampleParticles(config, sdfs = [], minExtent = None, maxExtent = None, filte
     for sdf_func in sdfs:
         _, maskA, sdfValues, _ = filterParticlesWithSDF(particlesA, sdf_func, noiseState['supports'][0], -1e-4)
         mask = mask & maskA
+        mask = mask.to(config['compute']['device'])
         noiseState['distances'] = torch.min(noiseState['distances'], sdfValues)
     noiseState['velocities'][~mask, :] = 0
     if filter:
@@ -421,7 +422,7 @@ def sampleParticles(config, sdfs = [], minExtent = None, maxExtent = None, filte
                 noiseState[k] = noiseState[k][mask]
         noiseState['numParticles'] = noiseState['positions'].shape[0]
         noiseState['index'] = torch.arange(noiseState['numParticles'], device = config['compute']['device'])
-
+    # printState(noiseState)
     neighborhood = neighborSearch(noiseState, noiseState, config)
     _, noiseState['numNeighbors'] = countUniqueEntries(neighborhood['indices'][0], noiseState['positions'])
     noiseState['neighborhood'] = neighborhood
@@ -640,7 +641,7 @@ def sampleBoundaryParticles(particleState, sdfs, config, modes = ['regular']):
     normals = particleState['normals'] if 'normals' in particleState else torch.zeros(particleState['positions'].shape[0], config['domain']['dim'], dtype = torch.float32, device = config['compute']['device'])
 
     for i, (sdf, mode) in enumerate(zip(sdfs, modes)):
-        maskedA, maskA, sdfValues, sdfGradients = filterParticlesWithSDF(particleState['positions'], operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
+        maskedA, maskA, sdfValues, sdfGradients = filterParticlesWithSDF(particleState['positions'], operatorDict['invert'](sdf), config['particle']['support'], 1e-4)
         fluidMask = fluidMask & maskA
 
         normals[sdfValues < distances,:] = sdfGradients[sdfValues < distances,:]
