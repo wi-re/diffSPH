@@ -128,9 +128,24 @@ def computeViscosityDeltaSPH_inviscid(stateA, stateB, neighborhood, config):
         if config['diffusion']['pi-switch']:
             pi_ij = torch.where(vr_ij < 0, pi_ij, 0)
 
-        V_j = stateB['masses'][j] / stateB['densities'][j]
+        V_j = stateB['masses'][j] /( stateA['densities'][i] +  stateB['densities'][j])
+        if 'normals' in stateB:
+            boundaryNormals = stateB['normals'][j]
+            v_ij_parallel = torch.einsum('ij,ij->i', v_ij, boundaryNormals).view(-1,1) * boundaryNormals
+            v_ij_orthogonal = v_ij - v_ij_parallel
+
+            vr_ij = torch.einsum('ij,ij->i', v_ij, x_ij)
+
+            pi_ij = vr_ij / (r_ij + eps * h_ij**2)
+            if config['diffusion']['pi-switch']:
+                pi_ij = torch.where(vr_ij < 0, pi_ij, 0)
+
         kq = (V_j * pi_ij).view(-1,1) * neighborhood['gradients']
-        return (alpha * stateA['supports'] * config['fluid']['cs'] * config['fluid']['rho0'] / stateA['densities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = stateA['numParticles'])
+        viscosityTerm =  (alpha * stateA['supports'] * config['fluid']['cs'] * config['fluid']['rho0'] / stateA['densities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = stateA['numParticles'])
+    
+
+
+        return viscosityTerm
         # return (alpha * fluidState['fluidSupports'] * config['fluid']['cs'] * config['fluid']['rho0'] / fluidState['densities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = fluidState['numParticles'])
 
 

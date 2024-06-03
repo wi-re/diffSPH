@@ -18,6 +18,18 @@ def computePressureAccelSwitch(stateA, stateB, neighborhood, config):
         p_i = stateA['pressures'][i]
         p_j = stateB['pressures'][j]
         p_ij = torch.where(torch.logical_or(p_i >= 0, stateA['surfaceMask'][i] > 0.5), p_j + p_i, p_j - p_i)
-        p_ij = p_j + p_i
+        # p_ij = p_j + p_i
+
+        masses = (stateA['masses'], stateB['masses'])
+        densities = (stateA['densities'], stateB['densities'])
+        i, j = neighborhood['indices']
+        gradKernels = neighborhood['gradients']
+        numParticles = stateA['numParticles']
+
+        k = (masses[1][j] / (densities[0][i] * densities[1][j] )).view(-1,1) * gradKernels
+        qij = p_ij
+        kq = torch.einsum('n... , nd -> n...d', qij, k)
+
+        return -scatter_sum(kq, i, dim = 0, dim_size = numParticles)
 
         return -sphOperationStates(stateA, stateB, p_ij, operation = 'gradient', gradientMode='summation') / stateA['densities'].view(-1,1)
