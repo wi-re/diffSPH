@@ -127,42 +127,42 @@ auto getAccessor(const torch::Tensor &t, const std::string &name, bool cuda = fa
 //         output[i] = qInterpolated;
 //     }
 
-// hostDeviceInline void sphOperation_Interpolate(
-//     int32_t i,
-//     float* output,
-//     float* masses_A, float* masses_B,
-//     float* densities_A, float* densities_B,
-//     float* quantities_A, float* quantities_B,
+hostDeviceInline void sphOperation_Interpolate(
+    int32_t i,
+    float* output,
+    float* masses_A, float* masses_B,
+    float* densities_A, float* densities_B,
+    float* quantities_A, float* quantities_B,
     
-//     int64_t *indices_i, int64_t *indicies_j,
-//     float* kernels,
-//     int32_t numParticles,
-//     int32_t* numNeighbors,
-//     int32_t* neighborOffset){
-//         float qInterpolated = 0.f;
+    int64_t *indices_i, int64_t *indicies_j,
+    float* kernels,
+    int32_t numParticles,
+    int32_t* numNeighbors,
+    int32_t* neighborOffset){
+        float qInterpolated = 0.f;
 
-//         int32_t numNeigh = numNeighbors[i];
-//         int32_t offset = neighborOffset[i];
+        int32_t numNeigh = numNeighbors[i];
+        int32_t offset = neighborOffset[i];
 
-//         // Iterate over the neighbors
-//         for (int j = 0; j < numNeigh; j++) {
-//             // Get the neighbor index
-//             int32_t index_j = indicies_j[offset + j];
-//             // Get the mass of the neighbor
-//             float mass_j = masses_B[index_j];
-//             // Get the density of the neighbor
-//             float density_j = densities_B[index_j];
-//             // Get the quantity of the neighbor
-//             float quantity_j = quantities_B[index_j];
-//             // Get the kernel value
-//             float kernel = kernels[offset + j];
+        // Iterate over the neighbors
+        for (int j = 0; j < numNeigh; j++) {
+            // Get the neighbor index
+            int32_t index_j = indicies_j[offset + j];
+            // Get the mass of the neighbor
+            float mass_j = masses_B[index_j];
+            // Get the density of the neighbor
+            float density_j = densities_B[index_j];
+            // Get the quantity of the neighbor
+            float quantity_j = quantities_B[index_j];
+            // Get the kernel value
+            float kernel = kernels[offset + j];
 
-//             // Compute the density contribution
-//             qInterpolated += mass_j / density_j * quantity_j * kernel;
-//         }
+            // Compute the density contribution
+            qInterpolated += mass_j / density_j * quantity_j * kernel;
+        }
 
-//         output[i] = qInterpolated;
-//     }
+        output[i] = qInterpolated;
+    }
 
 // void sphOperation_Density_cuda(
 //     float* output,
@@ -175,14 +175,23 @@ auto getAccessor(const torch::Tensor &t, const std::string &name, bool cuda = fa
 //     int32_t numParticles,
 //     int32_t* numNeighbors,
 //     int32_t* neighborOffset);
-// void sphOperation_Interpolation_cuda(
-//     float* output,
-//     float* masses_A, float* masses_B,
-//     float* densities_A, float* densities_B,
-//     float* quantities_A, float* quantities_B,
+void sphOperation_Interpolation_cuda(
+    float* output,
+    float* masses_A, float* masses_B,
+    float* densities_A, float* densities_B,
+    float* quantities_A, float* quantities_B,
     
-//     int64_t *indices_i, int64_t *indicies_j,
-//     float* kernels,
-//     int32_t numParticles,
-//     int32_t* numNeighbors,
-//     int32_t* neighborOffset);
+    int64_t *indices_i, int64_t *indicies_j,
+    float* kernels,
+    int32_t numParticles,
+    int32_t* numNeighbors,
+    int32_t* neighborOffset);
+
+
+
+void scatterAdd_cu(
+    float* output,
+    float* input,
+    int32_t numParticles,
+    int32_t* numNeighbors,
+    int32_t* neighborOffset);

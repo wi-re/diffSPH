@@ -42,6 +42,19 @@ at::Tensor sphInterpolation_t(
     if (quantities_shape.size() > 1) {
         entriesPerElement *= quantities_shape[1];
     }
+    auto masses_i_ptr = masses.first.data_ptr<float>();
+    auto masses_j_ptr = masses.second.data_ptr<float>();
+    auto densities_i_ptr = densities.first.data_ptr<float>();
+    auto densities_j_ptr = densities.second.data_ptr<float>();
+    auto quantities_i_ptr = quantities.first.data_ptr<float>();
+    auto quantities_j_ptr = quantities.second.data_ptr<float>();
+
+    auto indices_i_ptr = indices.first.data_ptr<int64_t>();
+    auto indices_j_ptr = indices.second.data_ptr<int64_t>();
+    auto kernels_ptr = kernels_.data_ptr<float>();
+
+    auto numNeighbors_ptr = numNeighbors_.data_ptr<int32_t>();
+    auto neighborOffset_ptr = neighborOffset_.data_ptr<int32_t>();
 
     auto output_shape = std::vector<int64_t>{numParticles};
     std::vector<int64_t> tensor_shape;
@@ -54,29 +67,42 @@ at::Tensor sphInterpolation_t(
 
     auto output_accessor = getAccessor<scalar_t, qDim>(output, "output", useCuda, verbose);
 
-    #pragma omp parallel for
-    for (int index_i = 0; index_i < numParticles; index_i++) {
-        if constexpr (qDim == 1) {
-            float qInterpolated = 0.f;
+    if(masses.first.is_cuda()){
+        sphOperation_Interpolation_cuda(
+            output.data_ptr<float>(),
+            masses_i_ptr, masses_j_ptr,
+            densities_i_ptr, densities_j_ptr,
+            quantities_i_ptr, quantities_j_ptr,
+            indices_i_ptr, indices_j_ptr,
+            kernels_ptr,
+            numParticles,
+            numNeighbors_ptr, neighborOffset_ptr);
+    }
+    else{
+        #pragma omp parallel for
+        for (int index_i = 0; index_i < numParticles; index_i++) {
+            if constexpr (qDim == 1) {
+                float qInterpolated = 0.f;
 
-            int32_t numNeigh = numNeighbors[index_i];
-            int32_t offset = neighborOffset[index_i];
+                int32_t numNeigh = numNeighbors[index_i];
+                int32_t offset = neighborOffset[index_i];
 
-            // Iterate over the neighbors
-            for (int j = 0; j < numNeigh; j++) {
-                // Get the neighbor index
-                int32_t index_j = indices_j[offset + j];
-                // Get the mass of the neighbor
-                scalar_t mass_j = masses_b[index_j];
-                // Get the kernel value
-                scalar_t kernel = kernels[offset + j];
+                // Iterate over the neighbors
+                for (int j = 0; j < numNeigh; j++) {
+                    // Get the neighbor index
+                    int32_t index_j = indices_j[offset + j];
+                    // Get the mass of the neighbor
+                    scalar_t mass_j = masses_b[index_j];
+                    // Get the kernel value
+                    scalar_t kernel = kernels[offset + j];
 
-                // Compute the density contribution
-                qInterpolated += mass_j * kernel;
+                    // Compute the density contribution
+                    qInterpolated += mass_j * kernel;
+                }
+
+                output_accessor[index_i] = qInterpolated;
+            }else{
             }
-
-            output_accessor[index_i] = qInterpolated;
-        }else{
         }
     }
     return output;
@@ -332,8 +358,74 @@ at::Tensor sphInterpolation(
 //     return output;
 // }
 
+
+
+
+template<typename scalar_t = float, std::size_t qDim = 1>
+at::Tensor scatterAdd(
+    torch::Tensor input,
+    int32_t numParticles,
+    torch::Tensor numNeighbors_,
+    torch::Tensor neighborOffset_
+){
+    bool verbose = false;
+    bool useCuda = input.is_cuda();        
+
+    auto defaultOptions = at::TensorOptions().device(input.device());
+    auto hostOptions = at::TensorOptions();
+
+    auto numNeighbors = getAccessor<int32_t, 1>(numNeighbors_, "numNeighbors", useCuda, verbose);
+    auto neighborOffset = getAccessor<int32_t, 1>(neighborOffset_, "neighborOffset", useCuda, verbose);
+    
+    auto quantities_shape = input.sizes();
+    auto numEntries = quantities_shape[0];
+    auto entriesPerElement = 1;
+
+    auto output_shape = std::vector<int64_t>{numParticles};
+    std::vector<int64_t> tensor_shape;
+    for (int i = 1; i < quantities_shape.size(); i++) {
+        output_shape.push_back(quantities_shape[i]);
+        tensor_shape.push_back(quantities_shape[i]);
+    }
+
+    auto output = torch::zeros(output_shape, defaultOptions.dtype(input.dtype()));
+
+    auto input_accessor = getAccessor<scalar_t, 1>(input, "input", useCuda, verbose);
+    auto output_accessor = getAccessor<scalar_t, 1>(output, "output", useCuda, verbose);
+
+    if(useCuda){
+        scatterAdd_cu(
+            output.data_ptr<float>(),
+            input.data_ptr<float>(),
+            numParticles,
+            numNeighbors_.data_ptr<int32_t>(), neighborOffset_.data_ptr<int32_t>());
+    }
+    else{
+
+    #pragma omp parallel for
+    for(int i = 0; i < numParticles; i++){
+        int32_t numNeigh = numNeighbors[i];
+        int32_t offset = neighborOffset[i];
+        float temporary = 0.f;
+        // auto temporary = torch::zeros(tensor_shape, defaultOptions.dtype(input.dtype()));
+
+        for(int j = 0; j < numNeigh; j++){
+            int32_t index_j = offset + j;
+            scalar_t input_j = input_accessor[index_j];
+            temporary += input_j;
+        }
+
+        output_accessor[i] = temporary;
+    }
+    }
+
+    return output;
+}
+
+
 #include <torch/extension.h>
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 //   m.def("sphDensity", &sphDensity, "SPH Density Interpolation");
   m.def("sphInterpolation", &sphInterpolation, "SPH Interpolation");
+  m.def("scatterAdd", &scatterAdd, "Scatter Add");
 }
