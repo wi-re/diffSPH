@@ -358,7 +358,7 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = []):
 
     noiseState['numParticles'] = particlesA.shape[0]
 
-    noiseState['neighborhood'] = neighborSearch(noiseState,noiseState, config)
+    _, noiseState['neighborhood'] = neighborSearch(noiseState,noiseState, config)
     noiseState['densities'] = particlesA.new_ones(particlesA.shape[0]) * config['fluid']['rho0'] #sphOperationStates(stateA, stateB, None, 'density')
     _, noiseState['numNeighbors'] = countUniqueEntries(noiseState['neighborhood']['indices'][0], noiseState['positions'])
 
@@ -375,7 +375,7 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = []):
         # _, maskA, _, _ = filterParticlesWithSDF(particlesA, sdf, noiseState['fluidSupports'][0], -1e-4)
         # mask = mask & maskA
     noiseState['fluidVelocities'][~mask, :] = 0
-    neighborhood = neighborSearch(noiseState,noiseState, config)
+    _, neighborhood = neighborSearch(noiseState,noiseState, config)
     _, noiseState['numNeighbors'] = countUniqueEntries(neighborhood['indices'][0], noiseState['positions'])
 
 
@@ -423,7 +423,7 @@ def sampleParticles(config, sdfs = [], minExtent = None, maxExtent = None, filte
         noiseState['numParticles'] = noiseState['positions'].shape[0]
         noiseState['index'] = torch.arange(noiseState['numParticles'], device = config['compute']['device'])
     # printState(noiseState)
-    neighborhood = neighborSearch(noiseState, noiseState, config)
+    _, neighborhood = neighborSearch(noiseState, noiseState, config)
     _, noiseState['numNeighbors'] = countUniqueEntries(neighborhood['indices'][0], noiseState['positions'])
     noiseState['neighborhood'] = neighborhood
 
@@ -576,7 +576,7 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
         sortedPositions = mod_positions[sortedIndices]
         shiftState['positions'] = sortedPositions
 
-        noiseNeighbors = neighborSearch(shiftState, noiseState, config)
+        _, noiseNeighbors = neighborSearch(shiftState, noiseState, config)
 
         noise = noiseSimplex.flatten().to(particlesA.device)
         noiseState['potential'] = sphOperationStates(noiseState, shiftState, (noise, noise), operation = 'interpolate', neighborhood = noiseNeighbors)
@@ -588,7 +588,7 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
         noiseState['potential'] = noiseSimplex.flatten().to(particlesA.device)
 
 
-    fluidNeighborhood = neighborSearch(noiseState, noiseState, config)
+    _, fluidNeighborhood = neighborSearch(noiseState, noiseState, config)
 
     noiseState['neighborhood'] = fluidNeighborhood
     # printState(noiseState)
@@ -707,7 +707,7 @@ def processBoundarySDFs(fluidState, config, sdfs, samplings = None):
         'bodyIDs': boundaryBodyIDs,
     }
 
-    boundaryState['neighborhood'] = neighborSearch(boundaryState, boundaryState, config)
+    _, boundaryState['neighborhood'] = neighborSearch(boundaryState, boundaryState, config)
     _, boundaryState['numNeighbors'] = countUniqueEntries(boundaryState['neighborhood']['indices'][0], boundaryState['positions'])
 
     return boundaryState

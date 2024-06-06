@@ -60,14 +60,15 @@ def createTempState(perennialState, tempState_prior = None):
                 tempState['fluidToBoundaryNeighborhood'] = tempState_prior['fluidToBoundaryNeighborhood']
             if 'boundaryGhostToFluidNeighborhood' in tempState_prior:
                 tempState['boundaryGhostToFluidNeighborhood'] = tempState_prior['boundaryGhostToFluidNeighborhood']
-
+            if 'boundaryGhost' in tempState_prior:
+                tempState['boundaryGhost'] = tempState_prior['boundaryGhost']
 
         del tempState_prior
     # Clean up residual neighborhoods in perennial State
     if 'neighborhood' in perennialState['fluid']:
         del perennialState['fluid']['neighborhood']
     if 'datastructure' in perennialState['fluid']:
-        del perennialState['fluid']['neighborhood']
+        del perennialState['fluid']['datastructure']
     if 'boundary' in perennialState:
         if 'neighborhood' in perennialState['boundary']:
             del perennialState['boundary']['neighborhood']
@@ -79,6 +80,8 @@ def createTempState(perennialState, tempState_prior = None):
             del perennialState['fluidToBoundaryNeighborhood']
         if 'boundaryGhostToFluidNeighborhood'in perennialState:
             del perennialState['boundaryGhostToFluidNeighborhood']
+        if 'boundaryGhost'in perennialState:
+            del perennialState['boundaryGhost']
 
         # boundaryToFluidNeighborhood']fluidToBoundaryNeighborhood
     return tempState
@@ -308,7 +311,9 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                 if 'boundaryGhostToFluidNeighborhood' in tempState:
                     perennialState['boundaryGhostToFluidNeighborhood'] = tempState['boundaryGhostToFluidNeighborhood']
                     del tempState['boundaryGhostToFluidNeighborhood']
-
+                if 'boundaryGhost' in tempState:
+                    perennialState['boundaryGhost'] = tempState['boundaryGhost']
+                    del tempState['boundaryGhost']
 
 
             if fluidUpdate[0] is not None:

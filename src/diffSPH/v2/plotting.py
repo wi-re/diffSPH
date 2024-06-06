@@ -208,7 +208,7 @@ from diffSPH.v2.util import printState
 def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhood = True, grid = True):
     visualizationState = copy.deepcopy(perennialState)
     if fluidNeighborhood:
-        visualizationState['fluid']['neighborhood'] = neighborSearch(visualizationState['fluid'],visualizationState['fluid'], config)
+        _, visualizationState['fluid']['neighborhood'] = neighborSearch(visualizationState['fluid'],visualizationState['fluid'], config)
         if 'densities' not in visualizationState['fluid']:
             visualizationState['fluid']['densities'] = sphOperationStates(visualizationState['fluid'], visualizationState['fluid'], quantities = None, operation = 'density', neighborhood = visualizationState['fluid']['neighborhood'])
     # visualizationState['fluid']['masses'] = perennialState['fluid']['masses']
@@ -254,7 +254,7 @@ def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhoo
         gridState = {
             'positions': P,	
             'numParticles': P.shape[0],    
-            'supports': 0,        
+            'supports': P.new_ones(P.shape[0]) * config['particle']['support'],        
         }
         gridConfig = {
             'domain': config['domain'],
@@ -270,7 +270,7 @@ def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhoo
         }
         gridConfig['simulation']['supportScheme'] = 'scatter'
         # printState(gridState)
-        visualizationState['gridNeighborhood'] = neighborSearch(gridState, visualizationState['fluid'], gridConfig) #0, perennialState['fluid']['supports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
+        _, visualizationState['gridNeighborhood'] = neighborSearch(gridState, visualizationState['fluid'], gridConfig) #0, perennialState['fluid']['supports'], getKernel('Wendland2'), config['domain']['dim'], config['domain']['periodicity'], config['domain']['minExtent'], config['domain']['maxExtent'], mode = 'scatter', algorithm ='compact')
         # visualizationState['gridNeighborhood'] = {}
         # visualizationState['gridNeighborhood']['indices'] = (i, j)
         # visualizationState['gridNeighborhood']['distances'] = rij
@@ -887,3 +887,35 @@ def postProcessPlot(config):
         subprocess.run(shlex.split(commandB))
         subprocess.run(shlex.split(commandC))
         # print('Done')
+
+
+
+def plotRegions(regions, axis):
+    for region in regions:
+        # visualizeParticles(region['particles'], axis[0,0], config)
+        for ic, contour in enumerate(region['contour']):
+            color = 'black'
+            style = '-'
+            if region['type'] == 'inlet':
+                color = 'green'
+                style = '--'
+            if region['type'] == 'forcing':
+                color = 'blue'
+                style = ':'
+            if region['type'] == 'outlet':
+                color = 'red'
+                style = ':'
+            if region['type'] == 'mirror':
+                color = 'black'
+                style = ':'
+            if region['type'] == 'boundary':
+                color = 'grey'
+                style = ':'
+            if region['type'] == 'fluid':
+                color = 'purple'
+                style = ':'
+            # axis[0,0].plot(contour[:,0], contour[:,1], color=color)
+            axis.plot(contour[:,0], contour[:,1], color = color, ls = style, label = region['type'] if ic == 0 else None)
+        if region['type'] == 'inlet':
+            axis.scatter(region['particles']['positions'][:,0].detach().cpu().numpy(), region['particles']['positions'][:,1].detach().cpu().numpy(), color = 'green', s = 1)
+    # axis[0,0].legend()

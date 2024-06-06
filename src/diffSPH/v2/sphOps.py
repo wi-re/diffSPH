@@ -255,3 +255,41 @@ def sphOperationStates(stateA, stateB, quantities : Union[torch.Tensor, tuple[to
         stateA['numParticles'], 
         operation = operation, gradientMode = gradientMode, divergenceMode = divergenceMode, 
         kernelLaplacians = neighborhood['laplacians'] if 'laplacians' in neighborhood else None)
+
+
+
+def adjunctMatrix(M, c, i):
+    res = torch.empty_like(M)
+
+    for j in range(c.shape[1]):
+        res[:,:,j] = c if j == i else M[:,:,j]
+    return res
+def LiuLiuConsistent(ghostState, fluidState, q):
+    b_scalar = sphOperationStates(ghostState, fluidState, (ghostState['masses'] *0, q), operation = 'interpolate', neighborhood = ghostState['neighborhood'])
+    b_grad = sphOperationStates(ghostState, fluidState, (ghostState['masses'] *0, q), operation = 'gradient', neighborhood = ghostState['neighborhood'], gradientMode = 'naive')
+    b = torch.cat([b_scalar.view(-1,1), b_grad], dim = 1)
+
+    xij = -ghostState['neighborhood']['vectors'] * ghostState['neighborhood']['distances'].view(-1,1) * ghostState['neighborhood']['supports'].view(-1,1)
+    M_0 = sphOperationStates(ghostState, fluidState, (torch.ones_like(q), torch.ones_like(q)), operation = 'interpolate', neighborhood = ghostState['neighborhood'])
+    M_grad = sphOperationStates(ghostState, fluidState, (torch.ones_like(q), torch.ones_like(q)), operation = 'gradient', neighborhood = ghostState['neighborhood'], gradientMode = 'naive')
+
+    M_x = sphOperationStates(ghostState, fluidState, xij, operation = 'interpolate', neighborhood = ghostState['neighborhood'])
+    M_x_grad = sphOperationStates(ghostState, fluidState, xij, operation = 'gradient', neighborhood = ghostState['neighborhood'], gradientMode = 'naive')
+
+    M = []
+    M.append(torch.cat([M_0.view(-1,1), M_x], dim = 1))
+    for i in range(M_grad.shape[1]):
+        M.append(torch.cat([M_grad[:,i].view(-1,1), M_x_grad[:,i,:]], dim = 1))
+        
+
+    M = torch.stack([row.unsqueeze(2) for row in M], dim = 2)[:,:,:,0].mT
+    # solution = torch.linalg.solve(M, b)
+
+    # d0 = torch.linalg.det(M)
+    d0 = torch.linalg.det(M)
+    adjunctMatrices = [torch.linalg.det(adjunctMatrix(M, b, i)) for i in range(M.shape[1])]
+    solution = torch.stack([adj/(d0 + 1e-7) for adj in adjunctMatrices], dim = 1)
+
+    # dets = []
+
+    return solution, M, b

@@ -159,7 +159,7 @@ def compileSourceFiles(sourceFiles, module_name, directory: Optional[str] = None
         smFlag = '-gencode=arch=compute_%d,code=sm_%d' % (computeCapability, computeCapability)
         # cudaFlags.append(smFlag)
         # cudaFlags.append('-arch=all -Wno-deprecated-gpu-targets -t 2')
-        cudaFlags.append('-arch=native -Wno-deprecated-gpu-targets -t 1')
+        cudaFlags.append('-arch=native -Wno-deprecated-gpu-targets -t 1 --extended-lambda')
         cudaFlags.append('-allow-unsupported-compiler')
         if verbose:
             print('smFlag:', smFlag)
