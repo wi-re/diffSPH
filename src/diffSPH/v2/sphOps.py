@@ -216,7 +216,7 @@ def sphOperation(
         radialDistances : torch.Tensor, directions : torch.Tensor, supports : torch.Tensor,                         # Graph information of |x_j - x_i| / hij, (x_j - x_i) / |x_j - x_i| and hij
         numParticles : int,                                                                                         # Ancillary information
         operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div',
-        kernelLaplacians : Optional[torch.Tensor] = None):           # Operation to perform
+        kernelLaplacians : Optional[torch.Tensor] = None) -> torch.Tensor:           # Operation to perform
     with record_function("[SPH] - Operation [%s]" % operation):
         if operation == 'density':
             return sphDensityInterpolation(masses, densities, quantities, neighborhood, kernels, numParticles)
@@ -234,6 +234,7 @@ def sphOperation(
             grad = sphGradient(masses, densities, quantities, neighborhood, kernelGradients, numParticles, type = gradientMode)
             div = sphDivergence(masses, densities, (grad, grad), neighborhood, kernelGradients, numParticles, type = gradientMode, mode = divergenceMode)
             return div
+    raise ValueError('Operation %s not supported!' % operation)
     
 # @torch.jit.script
 def sphOperationStates(stateA, stateB, quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]], neighborhood: dict, operation : str = 'interpolate', gradientMode : str = 'symmetric', divergenceMode : str = 'div'):

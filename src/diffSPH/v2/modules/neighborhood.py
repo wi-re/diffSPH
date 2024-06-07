@@ -478,6 +478,16 @@ def updateDataStructure(referenceState, config, priorDatastructure, verbose = Fa
     return priorDatastructure, False
 
 
+from diffSPH.v2.compiler import compileSourceFiles
+
+
+computeNeighborhood_module = compileSourceFiles(
+    ['./cppSrc/computeNeighborhood.cpp', './cppSrc/computeNeighborhood.cu'], module_name = 'computeNeighborhood', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
+# from torch.utils.cpp_extension import load
+
+computeNeighborhood_cpp = computeNeighborhood_module.computeNeighborhood
+
+
 def neighborSearch(queryState, referenceState, config, computeKernels = True, priorState = None, neighborDatastructure = None, verbose = False):
     if neighborDatastructure is None:
         if verbose:
@@ -530,10 +540,21 @@ def neighborSearch(queryState, referenceState, config, computeKernels = True, pr
     h_i = queryState['supports']
     h_j = referenceState['supports']
 
-    neighborhood_actual, hij_actual, rij, xij = computeNeighborhood(neighborhood, pos_x, pos_y, h_i, h_j, config, 'scatter')
+    # neighborhood_actual, hij_actual, rij, xij = computeNeighborhood(neighborhood, pos_x, pos_y, h_i, h_j, config, 'scatter')
 
-    numNeighbors = countUniqueEntries(neighborhood_actual[0], pos_x)[1].to(torch.int32)
-    neighborOffsets = torch.hstack((torch.tensor([0], dtype = torch.int32, device = numNeighbors.device), torch.cumsum(numNeighbors, dim = 0).to(torch.int32)))[:-1]\
+    # numNeighbors = countUniqueEntries(neighborhood_actual[0], pos_x)[1].to(torch.int32)
+    # neighborOffsets = torch.hstack((torch.tensor([0], dtype = torch.int32, device = numNeighbors.device), torch.cumsum(numNeighbors, dim = 0).to(torch.int32)))[:-1]\
+
+    numNeighbors, neighborOffsets, i, j, rij, xij, hij_actual = computeNeighborhood_cpp(
+    neighborhood, 
+    pos_x.shape[0],
+    numNeighbors_full, neighborOffsets_full,
+    (pos_x, pos_y), 
+    (h_i, h_j),
+    config['domain']['minExtent'], config['domain']['maxExtent'], config['domain']['periodicity'])
+
+    neighborhood_actual = (i, j)
+# torch.cuda.synchronize()
 
     if dirty:
         neighborDict = {
