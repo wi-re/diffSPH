@@ -149,7 +149,7 @@ def compileSourceFiles(sourceFiles, module_name, directory: Optional[str] = None
     # verbose = False
     cpp_standard_arg = build_cpp_standard_arg(cpp_standard)
 
-    hostFlags = [cpp_standard_arg, "-fPIC", "-O3", "-fopenmp"] if openMP else [cpp_standard_arg, "-fPIC", "-O3"]
+    hostFlags = [cpp_standard_arg, "-fPIC", "-O3", "-fopenmp", "-march=native"] if openMP else [cpp_standard_arg, "-fPIC", "-O3", "-march=native"]
     cudaFlags = [cpp_standard_arg,'-O3']
     
     if torch.cuda.is_available():
