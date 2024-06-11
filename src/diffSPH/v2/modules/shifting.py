@@ -461,7 +461,15 @@ def solveShifting(simulationState, config):
         for i in range(config['shifting']['maxIterations']):
             with record_function("[Shifting] - Shift Iteration [Iteration: %3d]" % i):
                 with record_function("[Shifting] - Shift Iteration [1 - Neighbor Search]"):
-                    particleState['neighborhood'] = neighborSearch(particleState, particleState, config, priorNeighborhood=particleState['neighborhood'] if 'neighborhood' in particleState else None)
+                    particleState['datastructure'], particleState['neighborhood'] = neighborSearch(particleState, particleState, config, 
+                        computeKernels = True, 
+                        priorState = None if 'neighborhood' not in particleState else particleState['neighborhood'],
+                        neighborDatastructure = None if 'datastructure' not in particleState else particleState['datastructure'],
+                        verbose = False)
+                    particleState['numNeighbors'] = particleState['neighborhood']['numNeighbors']
+                
+                    
+                    # particleState['neighborhood'] = neighborSearch(particleState, particleState, config, priorNeighborhood=particleState['neighborhood'] if 'neighborhood' in particleState else None)
                 if config['shifting']['summationDensity']:
                     particleState['densities'] = sphOperationStates(particleState, particleState, None, operation = 'density', neighborhood=particleState['neighborhood'])
 

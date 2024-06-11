@@ -112,8 +112,29 @@ def computeViscosityPrice2012(stateA, stateB, neighborhood, config):
         # print(mu_ij, pi_ij)
         return -scatter_sum((stateB['masses'][j] * pi_ij).view(-1,1) * neighborhood['gradients'], i, dim = 0, dim_size = stateA['numParticles'])
     
+from diffSPH.v2.compiler import compileSourceFiles
+
+sphOperation_cpp = compileSourceFiles(
+    ['/home/winchenbach/dev/diffSPH/partiBench/viscosityKernel.cpp', '/home/winchenbach/dev/diffSPH/partiBench/viscosityKernel.cu'], module_name = 'viscosityOperations', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
+# from torch.utils.cpp_extension import load
+
+viscosityKernel_cpp = sphOperation_cpp.viscosityKernel
+
 def computeViscosityDeltaSPH_inviscid(stateA, stateB, neighborhood, config):
     with record_function("[SPH] - Fluid Viscosity [deltaSPH inviscid]"):
+        # return viscosityKernel_cpp(
+        #     neighborhood['indices'], neighborhood['supports'], neighborhood['kernels'], neighborhood['gradients'], neighborhood['distances'], neighborhood['vectors'], 
+        #     stateA['numParticles'],
+        #     neighborhood['numNeighbors'],
+        #     neighborhood['neighborOffsets'],
+
+
+        #     (stateA['velocities'], stateB['velocities']), 
+        #     (stateA['densities'], stateB['densities']), 
+        #     (stateA['masses'], stateB['masses']), 
+        #     (stateA['supports'], stateB['supports']), 
+        #     config['fluid']['cs'], config['fluid']['rho0'], config['diffusion']['alpha'], config['diffusion']['eps'], config['diffusion']['pi-switch'])
+
         eps = config['diffusion']['eps']
         alpha = config['diffusion']['alpha']
 
@@ -129,16 +150,16 @@ def computeViscosityDeltaSPH_inviscid(stateA, stateB, neighborhood, config):
             pi_ij = torch.where(vr_ij < 0, pi_ij, 0)
 
         V_j = stateB['masses'][j] /( stateA['densities'][i] +  stateB['densities'][j])
-        if 'normals' in stateB:
-            boundaryNormals = stateB['normals'][j]
-            v_ij_parallel = torch.einsum('ij,ij->i', v_ij, boundaryNormals).view(-1,1) * boundaryNormals
-            v_ij_orthogonal = v_ij - v_ij_parallel
+        # if 'normals' in stateB:
+        #     boundaryNormals = stateB['normals'][j]
+        #     v_ij_parallel = torch.einsum('ij,ij->i', v_ij, boundaryNormals).view(-1,1) * boundaryNormals
+        #     v_ij_orthogonal = v_ij - v_ij_parallel
 
-            vr_ij = torch.einsum('ij,ij->i', v_ij, x_ij)
+        #     vr_ij = torch.einsum('ij,ij->i', vr_ij, x_ij)
 
-            pi_ij = vr_ij / (r_ij + eps * h_ij**2)
-            if config['diffusion']['pi-switch']:
-                pi_ij = torch.where(vr_ij < 0, pi_ij, 0)
+        #     pi_ij = vr_ij / (r_ij + eps * h_ij**2)
+        #     if config['diffusion']['pi-switch']:
+        #         pi_ij = torch.where(vr_ij < 0, pi_ij, 0)
 
         kq = (V_j * pi_ij).view(-1,1) * neighborhood['gradients']
         viscosityTerm =  (alpha * stateA['supports'] * config['fluid']['cs'] * config['fluid']['rho0'] / stateA['densities']).view(-1,1) * scatter_sum(kq, i, dim = 0, dim_size = stateA['numParticles'])

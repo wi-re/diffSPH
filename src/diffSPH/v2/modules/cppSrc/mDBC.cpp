@@ -1,5 +1,5 @@
 #include "mDBC.h"
- 
+
  
 std::vector<at::Tensor> mDBC(
     std::pair<torch::Tensor, torch::Tensor> masses_,

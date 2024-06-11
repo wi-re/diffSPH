@@ -27,7 +27,46 @@ def buildBoundaryGhostParticles(perennialState, config):
     return boundaryGhostState
 
 
+from diffSPH.v2.compiler import compileSourceFiles
+
+mDBC_cpp = compileSourceFiles(
+    ['./cppSrc/mDBC.cpp', './cppSrc/mDBC.cu'], module_name = 'mDBC', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
+# from torch.utils.cpp_extension import load
+
+mDBCDensity_cpp = mDBC_cpp.mDBC
+
+
 def mDBCDensity(perennialState, config):
+    masses = (perennialState['boundaryGhost']['masses'], perennialState['fluid']['masses']) 
+    densities = (perennialState['boundaryGhost']['densities'], perennialState['fluid']['densities'])
+    velocities = (perennialState['boundaryGhost']['velocities'], perennialState['fluid']['velocities'])
+
+    neighborhood = perennialState['boundaryGhost']['neighborhood']['indices']
+    kernels = perennialState['boundaryGhost']['neighborhood']['kernels']
+    kernelGradients = perennialState['boundaryGhost']['neighborhood']['gradients']
+    radialDistances = perennialState['boundaryGhost']['neighborhood']['distances']
+    directions = perennialState['boundaryGhost']['neighborhood']['vectors']
+    supports = perennialState['boundaryGhost']['neighborhood']['supports']
+
+    numParticles = (perennialState['boundaryGhost']['numParticles'], perennialState['fluid']['numParticles'])
+    numNeighbors = perennialState['boundaryGhost']['numNeighbors']
+
+    boundaryPositions = (perennialState['boundary']['positions'], perennialState['boundaryGhost']['positions'])
+
+    neighborOffsets = perennialState['boundaryGhost']['neighborhood']['neighborOffsets']
+
+
+    # return mDBCDensity_cpp(
+    #     masses, densities, boundaryPositions,
+
+    #     numParticles[0], numParticles[1],
+    #     neighborhood,
+    #     numNeighbors, neighborOffsets,
+    #     kernels, kernelGradients,
+    #     radialDistances, directions, supports,
+    #     config['fluid']['rho0']    
+    # )
+
     boundaryGhostState = perennialState['boundaryGhost']
 
     shepardNominator = sphOperationStates(boundaryGhostState, perennialState['fluid'], None, operation = 'density', neighborhood = boundaryGhostState['neighborhood'])
@@ -79,9 +118,9 @@ def mDBCDensity(perennialState, config):
     boundaryParticlePositions = perennialState['boundary']['positions']
     ghostParticlePositions = boundaryGhostState['positions']
     relPos = boundaryParticlePositions - ghostParticlePositions
-    # relDist = torch.linalg.norm(relPos, dim = 1)
-    # relDist = torch.clamp(relDist, min = 1e-7, max = config['particle']['support']*3.)
-    # relPos = relPos * (relDist / (torch.linalg.norm(relPos, dim = 1) + 1e-7))[:,None]
+    relDist = torch.linalg.norm(relPos, dim = 1)
+    relDist = torch.clamp(relDist, min = 1e-7, max = config['particle']['support']*3.)
+    relPos = relPos * (relDist / (torch.linalg.norm(relPos, dim = 1) + 1e-7))[:,None]
 
     boundaryDensity[neighCounts > threshold] = (res[neighCounts > threshold,0] + torch.einsum('nu, nu -> n',(relPos)[neighCounts > threshold, :], res[neighCounts > threshold, 1:] ))
     # boundaryDensity = torch.clamp(boundaryDensity, min = restDensity)
@@ -102,6 +141,7 @@ def mDBCDensity(perennialState, config):
     # # boundaryDensity = shepardDensity
     # boundaryDensity[neighCounts > threshold] = torch.clamp(extrapolated[neighCounts > threshold], min = restDensity)
     boundaryDensity = torch.clamp(boundaryDensity, min = restDensity)
+    boundaryDensity[neighCounts  <= threshold] += torch.abs(perennialState['boundary']['distances'])[neighCounts  <= threshold] / config['particle']['support'] * 2
 
     # print(f'Boundary Density for Timestep {perennialState["timestep"]}: {boundaryDensity.min().item()} - {boundaryDensity.max().item()} mean: {boundaryDensity.mean().item()}')
     # print(f'shepardDensity: {shepardDensity.min().item()} - {shepardDensity.max().item()} mean: {shepardDensity.mean().item()}')

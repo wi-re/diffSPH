@@ -332,7 +332,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                         perennialState['boundary']['drhodt'] = boundaryUpdate[2]
             # if 'neighborhood' in tempState['fluid']:
                 # del tempState['fluid']['neighborhood']
-            if 'boundary' in tempState and 'neighborhood' in tempState['boundary']:
+            if 'boundary' in tempState:# and 'neighborhood' in tempState['boundary']:
                 # del tempState['boundary']['neighborhood']
                 perennialState['boundary']['densities'] = tempState['boundary']['densities']
             # if 'neighborhood' in tempState:

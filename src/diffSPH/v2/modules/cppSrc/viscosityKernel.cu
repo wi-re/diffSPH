@@ -1,4 +1,4 @@
-#include "mDBC.h"
+#include "viscosityKernel.h"
 
 template<typename Func, typename... Ts>
 __global__ void kernelWrapper(Func kernel, int32_t numThreads, Ts&&... args) {
@@ -41,30 +41,40 @@ void launchKernel(Func kernel, int32_t numParticles, Ts&&... args) {
     // cuda_error_check();
 }
 
-void mDBCDensity_cuda(
-    int32_t numParticles,
-    torch::Tensor masses_j, torch::Tensor densities_j, torch::Tensor positions_i, torch::Tensor positions_j,
-    torch::Tensor indices_j, torch::Tensor kernels, torch::Tensor kernelGradients, torch::Tensor distances, torch::Tensor vectors, torch::Tensor supports,
-    torch::Tensor numNeighbors, torch::Tensor neighborOffset,
-    torch::Tensor mDBCDensity, torch::Tensor shepardDensity, float rho0){
+
+
+
+void viscosityKernel_cuda(int32_t numParticles,
+torch::Tensor velocities_i, torch::Tensor velocities_j,
+torch::Tensor masses_i, torch::Tensor masses_j,
+torch::Tensor densities_i, torch::Tensor densities_j,
+torch::Tensor supports_i, torch::Tensor supports_j,
+torch::Tensor indices_j, torch::Tensor supports, torch::Tensor kernels,
+torch::Tensor gradients, torch::Tensor distances, torch::Tensor vectors,
+torch::Tensor numNeighbors, torch::Tensor neighborOffset,
+torch::Tensor output, float cs, float rho0, float alpha, float eps, bool pi_switch){
+
+    auto velocities_i_a = velocities_i.packed_accessor32<float,2, traits>();
+    auto velocities_j_a = velocities_j.packed_accessor32<float,2, traits>();
+    auto masses_i_a = masses_i.packed_accessor32<float,1, traits>();
     auto masses_j_a = masses_j.packed_accessor32<float,1, traits>();
+    auto densities_i_a = densities_i.packed_accessor32<float,1, traits>();
     auto densities_j_a = densities_j.packed_accessor32<float,1, traits>();
-    auto positions_i_a = positions_i.packed_accessor32<float,2, traits>();
-    auto positions_j_a = positions_j.packed_accessor32<float,2, traits>();
+    auto supports_i_a = supports_i.packed_accessor32<float,1, traits>();
+    auto supports_j_a = supports_j.packed_accessor32<float,1, traits>();
     auto indices_j_a = indices_j.packed_accessor32<int64_t,1, traits>();
+    auto supports_a = supports.packed_accessor32<float,1, traits>();
     auto kernels_a = kernels.packed_accessor32<float,1, traits>();
-    auto kernelGradients_a = kernelGradients.packed_accessor32<float,2, traits>();
+    auto gradients_a = gradients.packed_accessor32<float,2, traits>();
     auto distances_a = distances.packed_accessor32<float,1, traits>();
     auto vectors_a = vectors.packed_accessor32<float,2, traits>();
-    auto supports_a = supports.packed_accessor32<float,1, traits>();
     auto numNeighbors_a = numNeighbors.packed_accessor32<int32_t,1, traits>();
     auto neighborOffset_a = neighborOffset.packed_accessor32<int32_t,1, traits>();
-    auto mDBCDensity_a = mDBCDensity.packed_accessor32<float,1, traits>();
-    auto shepardDensity_a = shepardDensity.packed_accessor32<float,1, traits>();
+    auto output_a = output.packed_accessor32<float,2, traits>();
 
-    auto mDBCDensityFn = [=] __device__ (int32_t i){
-        mDBCDensityKernel(i, masses_j_a, densities_j_a, positions_i_a, positions_j_a, indices_j_a, kernels_a, kernelGradients_a, distances_a, vectors_a, supports_a, numNeighbors_a, neighborOffset_a, mDBCDensity_a, shepardDensity_a, rho0);
-    };
-
-    launchKernel(mDBCDensityFn, numParticles);
-    }
+    launchKernel([=] __device__(int32_t index_i){
+        viscosityFn(index_i,
+        velocities_i_a, velocities_j_a, masses_i_a, masses_j_a, densities_i_a, densities_j_a, supports_i_a, supports_j_a,
+        indices_j_a, supports_a, kernels_a, gradients_a, distances_a, vectors_a, numNeighbors_a, neighborOffset_a, output_a, cs, rho0, alpha, eps, pi_switch);
+    }, numParticles);
+}
