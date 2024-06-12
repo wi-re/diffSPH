@@ -5,9 +5,10 @@ from diffSPH.v2.modules.neighborhood import neighborSearch
 from diffSPH.v2.sphOps import adjunctMatrix, LiuLiuConsistent
 
 
+
 def buildBoundaryGhostParticles(perennialState, config):
     boundaryParticlePositions = perennialState['boundary']['positions'] 
-    ghostParticlePositions = boundaryParticlePositions - 2 * perennialState['boundary']['distances'].view(-1,1) * perennialState['boundary']['normals'] 
+    ghostParticlePositions = boundaryParticlePositions + 2 * perennialState['boundary']['distances'].view(-1,1) * perennialState['boundary']['normals'] 
 
     boundaryGhostState = {
         'positions': ghostParticlePositions,
@@ -20,11 +21,15 @@ def buildBoundaryGhostParticles(perennialState, config):
     }
 
     _, boundaryGhostState['neighborhood'] = neighborSearch(boundaryGhostState, perennialState['fluid'], config, True, perennialState['boundaryGhost']['neighborhood'] if 'boundaryGhost' in perennialState and 'neighborhood' in perennialState['boundaryGhost'] else None, perennialState['fluid']['datastructure'] if 'datastructure' in perennialState['fluid'] else None, False)
+    _, boundaryGhostState['neighborhood'] = neighborSearch(boundaryGhostState, perennialState['fluid'], config, True, None, None, False)
+    
     boundaryGhostState['numNeighbors'] = boundaryGhostState['neighborhood']['numNeighbors']
     # boundaryGhostState['neighborhood'] = neighborSearch(boundaryGhostState, perennialState['fluid'], config, computeKernels=True)
     # _, boundaryGhostState['numNeighbors'] = countUniqueEntries(boundaryGhostState['neighborhood']['indices'][0], ghostParticlePositions)
 
     return boundaryGhostState
+
+# perennialState['boundaryGhost'] = buildBoundaryGhostParticles(perennialState, config)
 
 
 from diffSPH.v2.compiler import compileSourceFiles

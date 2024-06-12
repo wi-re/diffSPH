@@ -67,7 +67,7 @@ def pinv2x2(M):
         S2 = torch.sqrt((a**2 + b**2 - c**2 - d**2)**2 + 4* (a * c + b *d)**2)
 
         o1 = torch.sqrt((S1 + S2) / 2)
-        o2 = torch.sqrt((S1 - S2) / 2)
+        o2 = torch.sqrt((S1 - S2 + 1e-7) / 2)
 
         phi = 0.5 * torch.atan2(2 * a * b + 2 * c * d, a**2 - b**2 + c**2 - d**2)
         cosPhi = torch.cos(phi)

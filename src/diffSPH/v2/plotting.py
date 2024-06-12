@@ -817,14 +817,14 @@ import os
 
 def setupInitialPlot(perennialState, particleState, config):
     fig, axis = plt.subplot_mosaic(config['plot']['mosaic'], figsize=config['plot']['figSize'], sharex = False, sharey = False)
-    print('Setting up initial plot')
-    print('Computing visualization state')
+    # print('Setting up initial plot')
+    # print('Computing visualization state')
     visualizationState = prepVisualizationState(perennialState, config)
 
     plotStates = {}
 
     for plot in config['plot']['plots']:
-        print(f'Setting up plot {plot}')
+        # print(f'Setting up plot {plot}')
         axis[plot].set_title(config['plot']['plots'][plot]['title'])
         plotStates[plot] = visualizeParticleQuantity(fig, axis[plot], config, visualizationState, **config['plot']['plots'][plot])
 
@@ -832,7 +832,7 @@ def setupInitialPlot(perennialState, particleState, config):
     fig.suptitle(rf'''Frame {perennialState["timestep"]}, $t = {perennialState["time"] :.3g}$, $\Delta t = {perennialState["dt"]:.3e}$)''')
     fig.tight_layout()
 
-    print('Done setting up initial plot')
+    # print('Done setting up initial plot')
     if 'neighborhood' in visualizationState['fluid']:
         perennialState['fluid']['neighborhood'] = visualizationState['fluid']['neighborhood']
     

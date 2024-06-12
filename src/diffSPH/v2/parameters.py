@@ -29,6 +29,7 @@ integrationParameters = [
 computeParameters = [
     Parameter('compute', 'device', str, 'cpu', required = False, export = False),
     Parameter('compute', 'precision', str, 'float32', required = False, export = False),
+    Parameter('compute', 'checkNaN', bool, False, required = False, export = False),
 ]
 
 kernelParameters = [
