@@ -289,14 +289,14 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                                     parallel_component = torch.sum(oldVelocities * grad, dim=1, keepdim=True) * grad / torch.norm(grad, dim=1, keepdim=True)**2
                                     orthogonal_component = oldVelocities - parallel_component
 
-                                    dxdt[inMirrorRegion,0] = oldVelocities[:,0] - torch.where(boundaryDistance < 0, orthogonal_component[:,0], 0)
-                                    dxdt[inMirrorRegion,1] = oldVelocities[:,1] - torch.where(boundaryDistance < 0, orthogonal_component[:,1], 0)
+                                    dxdt[inMirrorRegion,0] = oldVelocities[:,0] - 0.5 * torch.where(boundaryDistance < 0, orthogonal_component[:,0], 0)
+                                    dxdt[inMirrorRegion,1] = oldVelocities[:,1] - 0.5 * torch.where(boundaryDistance < 0, orthogonal_component[:,1], 0)
 
                                     parallel_component = torch.sum(dudt[inMirrorRegion] * grad, dim=1, keepdim=True) * grad / torch.norm(grad, dim=1, keepdim=True)**2
                                     orthogonal_component = oldVelocities - parallel_component
 
-                                    dudt[inMirrorRegion,0] = dudt[inMirrorRegion,0] - torch.where(boundaryDistance < 0, orthogonal_component[:,0], 0)
-                                    dudt[inMirrorRegion,1] = dudt[inMirrorRegion,1] - torch.where(boundaryDistance < 0, orthogonal_component[:,1], 0)
+                                    dudt[inMirrorRegion,0] = dudt[inMirrorRegion,0] - 0.5 * torch.where(boundaryDistance < 0, orthogonal_component[:,0], 0)
+                                    dudt[inMirrorRegion,1] = dudt[inMirrorRegion,1] - 0.5 * torch.where(boundaryDistance < 0, orthogonal_component[:,1], 0)
 
                     if fluidUpdate_k1[0] is not None:
                         perennialState['fluid']['positions'] += dxdt * dt

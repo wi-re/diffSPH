@@ -410,11 +410,14 @@ def sampleParticles(config, sdfs = [], minExtent = None, maxExtent = None, filte
 
 
     mask = torch.ones_like(noiseState['areas'], dtype = torch.bool)
-    for sdf_func in sdfs:
-        _, maskA, sdfValues, _ = filterParticlesWithSDF(particlesA, sdf_func, noiseState['supports'][0], -1e-4)
-        mask = mask & maskA
+    if len(sdfs) > 0:
+        mask = torch.zeros_like(noiseState['areas'], dtype = torch.bool)
+
+        for sdf_func in sdfs:
+            _, maskA, sdfValues, _ = filterParticlesWithSDF(particlesA, sdf_func, noiseState['supports'][0], -1e-4)
+            mask = mask | maskA
+            noiseState['distances'] = torch.min(noiseState['distances'], sdfValues)
         mask = mask.to(config['compute']['device'])
-        noiseState['distances'] = torch.min(noiseState['distances'], sdfValues)
     noiseState['velocities'][~mask, :] = 0
     if filter:
         for k in noiseState.keys():
@@ -702,7 +705,7 @@ def processBoundarySDFs(fluidState, config, sdfs, samplings = None):
 
         'numParticles': boundaryParticles.shape[0],
 
-        'distances': boundaryDistances,
+        'distances': -boundaryDistances,
         'normals': boundaryNormals,
         'bodyIDs': boundaryBodyIDs,
     }
@@ -711,3 +714,39 @@ def processBoundarySDFs(fluidState, config, sdfs, samplings = None):
     _, boundaryState['numNeighbors'] = countUniqueEntries(boundaryState['neighborhood']['indices'][0], boundaryState['positions'])
 
     return boundaryState
+
+
+
+def generateInitialParticles(config):
+    regions = config['regions']
+
+    particleState, mask = sampleParticles(config, sdfs = [region['sdf'] for region in regions if (region['type'] == 'inlet' or region['type'] == 'fluid')])
+
+    for region in regions:
+        if region['type'] == 'fluid' or region['type'] == 'inlet':
+            distances = region['sdf'](particleState['positions'])
+            mask = distances < 0
+            particleState['velocities'][mask] = region['velocity']
+        
+            
+
+    perennialState = {
+        'fluid': copy.deepcopy(particleState),
+        'time': 0.0,
+        'timestep': 0,
+        'dt': config['timestep']['dt'],
+        'uidCounter': particleState['numParticles']
+    }
+
+    if len([region['sdf'] for region in regions if region['type'] == 'boundary']) > 0:
+        boundaryState = processBoundarySDFs(particleState, config, [region['sdf'] for region in regions if region['type'] == 'boundary'], 'regular')
+        perennialState = {
+            'fluid': copy.deepcopy(particleState),
+            'boundary': boundaryState,
+            'time': 0.0,
+            'timestep': 0,
+            'dt': config['timestep']['dt'],
+            'uidCounter': particleState['numParticles']
+        }
+
+    return perennialState

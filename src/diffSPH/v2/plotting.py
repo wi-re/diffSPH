@@ -890,7 +890,7 @@ def postProcessPlot(config):
 
 
 
-def plotRegions(regions, axis):
+def plotRegions(regions, axis, plotFluid = True, plotParticles = True):
     for region in regions:
         # visualizeParticles(region['particles'], axis[0,0], config)
         for ic, contour in enumerate(region['contour']):
@@ -910,12 +910,19 @@ def plotRegions(regions, axis):
                 style = ':'
             if region['type'] == 'boundary':
                 color = 'grey'
-                style = ':'
+                style = '--'
             if region['type'] == 'fluid':
                 color = 'purple'
-                style = ':'
+                style = '--'
+            if region['type'] == 'fluid' and ~plotFluid:
+                continue
             # axis[0,0].plot(contour[:,0], contour[:,1], color=color)
             axis.plot(contour[:,0], contour[:,1], color = color, ls = style, label = region['type'] if ic == 0 else None)
-        if region['type'] == 'inlet':
-            axis.scatter(region['particles']['positions'][:,0].detach().cpu().numpy(), region['particles']['positions'][:,1].detach().cpu().numpy(), color = 'green', s = 1)
+        if plotParticles:
+            if region['type'] == 'inlet' and plotFluid: 
+                axis.scatter(region['particles']['positions'][:,0].detach().cpu().numpy(), region['particles']['positions'][:,1].detach().cpu().numpy(), color = 'green', s = 1)
+            if region['type'] == 'fluid' and plotFluid: 
+                axis.scatter(region['particles']['positions'][:,0].detach().cpu().numpy(), region['particles']['positions'][:,1].detach().cpu().numpy(), color = 'purple', s = 1)
+            if region['type'] == 'boundary':
+                axis.scatter(region['particles']['positions'][:,0].detach().cpu().numpy(), region['particles']['positions'][:,1].detach().cpu().numpy(), color = 'grey', s = 1)
     # axis[0,0].legend()

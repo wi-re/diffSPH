@@ -121,8 +121,9 @@ from diffSPH.v2.modules.density import computeDensity
 import torch
 from diffSPH.v2.modules.neighborhood import neighborSearch, searchNeighbors
 from diffSPH.v2.modules.normalizationMatrices import computeCovarianceMatrices
-from diffSPH.v2.modules.inletOutlet import buildOutletGhostParticles
+# from diffSPH.v2.modules.inletOutlet import buildOutletGhostParticles
 from diffSPH.v2.modules.mDBC import buildBoundaryGhostParticles, mDBCDensity
+from diffSPH.v2.modules.inletOutlet import buildOutletGhostParticles
 
 def checkNaNs(state):
     for key in state:
@@ -166,6 +167,7 @@ def simulationStep(state, config):
             else:
                 state['fluid']['densities'], _ = callModule(state, computeDensity, config, 'fluid')
             torch.cuda.synchronize()
+        # print(f'Density Min: {state["fluid"]["densities"].min()}, Max: {state["fluid"]["densities"].max()}')
         if config['boundary']['active']:
             with record_function("[SPH] - deltaSPH (3 - mDBC Density Estimate)"):
                 state['boundary']['densities'], state['boundaryGhost']['densities'] = mDBCDensity(state, config)
@@ -183,20 +185,22 @@ def simulationStep(state, config):
                 neighbors = ghostState['neighborhood']['indices'][0]
                 solution, M, b = LiuLiuConsistent(ghostState, state['fluid'], state['fluid']['densities'])
 
-                cond = torch.logical_and(ghostState['numNeighbors'] >= 10, ghostState['sdf_dist'] < 2.5 * config['particle']['support'])
+                cond = torch.logical_and(ghostState['numNeighbors'] >= 1, ghostState['sdf_dist'] < 2.5 * config['particle']['support'])
                 cond = ghostState['numNeighbors'] >= 10
 
                 def updateQuantity(state, ghostState, quantity, solution, cond):
                     return torch.where(cond, solution[:,0] + torch.einsum('nd, nd -> n', ghostState['sdf_dist'][:,None] * ghostState['sdf_grad'] * 2, solution[:,1:]), quantity)
                 state['fluid']['densities'][ghostState['fluidIndex']] = updateQuantity(state, ghostState, state['fluid']['densities'][ghostState['fluidIndex']], solution, cond)
-                
+                state['fluid']['outletMarker'] = state['fluid']['densities'].new_zeros(state['fluid']['densities'].shape[0])
+                state['fluid']['outletMarker'][ghostState['fluidIndex']] = 1
+
                 solution, M, b = LiuLiuConsistent(ghostState, state['fluid'], state['fluid']['velocities'][:,0])
                 state['fluid']['velocities'][ghostState['fluidIndex'],0] = updateQuantity(state, ghostState, state['fluid']['velocities'][ghostState['fluidIndex']][:,0], solution, cond)
 
                 
                 solution, M, b = LiuLiuConsistent(ghostState, state['fluid'], state['fluid']['velocities'][:,1])
                 state['fluid']['velocities'][ghostState['fluidIndex'],1] =updateQuantity(state, ghostState, state['fluid']['velocities'][ghostState['fluidIndex']][:,1], solution, cond)
-                
+
                 if config['compute']['checkNaN']:
                     checkNaN(state['fluid']['densities'], 'densities')
                     checkNaN(state['fluid']['velocities'], 'velocities')
@@ -273,6 +277,18 @@ def simulationStep(state, config):
         if 'boundary' in state:
             state['fluid']['pressureAccel'], state['boundary']['pressureAccel'] = callModule(state, computePressureAccel, config, 'all')
             if config['compute']['checkNaN']:
+                # print(f'Pressure Min: {state["fluid"]["pressureAccel"].min()}, Max: {state["fluid"]["pressureAccel"].max()}')
+                # print(f'Density Min: {state["fluid"]["densities"].min()}, Max: {state["fluid"]["densities"].max()}')
+                # if 'outletMarker' in state['fluid']:
+                #     print('In Mask:')
+                #     print(f'Pressure Min: {state["fluid"]["pressureAccel"][state["fluid"]["outletMarker"] == 1].min()}, Max: {state["fluid"]["pressureAccel"][state["fluid"]["outletMarker"] == 1].max()}')
+                #     print(f'Density Min: {state["fluid"]["densities"][state["fluid"]["outletMarker"] == 1].min()}, Max: {state["fluid"]["densities"][state["fluid"]["outletMarker"]== 1].max()}')
+
+                #     print('Out Mask:')
+                #     print(f'Pressure Min: {state["fluid"]["pressureAccel"][state["fluid"]["outletMarker"] == 0].min()}, Max: {state["fluid"]["pressureAccel"][state["fluid"]["outletMarker"] == 0].max()}')
+                #     print(f'Density Min: {state["fluid"]["densities"][state["fluid"]["outletMarker"] == 0].min()}, Max: {state["fluid"]["densities"][state["fluid"]["outletMarker"] == 0].max()}')
+
+
                 checkNaN(state['fluid']['pressureAccel'], 'pressureAccel')
                 checkNaN(state['boundary']['pressureAccel'], 'boundary - pressureAccel')
         else:
@@ -298,12 +314,37 @@ def simulationStep(state, config):
         if config['compute']['checkNaN']:
             checkNaN(dudt, 'dudt')
             checkNaN(drhodt, 'drhodt')
-            
+        
 
         if 'regions' in config and  config['regions'] is not None:
             if state['outletGhost'] is not None:
                 dudt[ghostState['fluidIndex'],:] = 0
                 drhodt[ghostState['fluidIndex']] = 0
+
+                    
+                # bi = torch.unique(state['boundaryToFluidNeighborhood']['indices'][0])
+                # oi = state['outletGhost']['fluidIndex']
+
+                # hasBoundaryNeighbors = torch.zeros(state['fluid']['numParticles'], dtype = torch.bool, device = state['fluid']['positions'].device)
+                # hasBoundaryNeighbors[bi] = True
+
+                # hasOutletNeighbors = torch.zeros(state['fluid']['numParticles'], dtype = torch.bool, device = state['fluid']['positions'].device)
+                # hasOutletNeighbors[oi] = True
+
+                # mask = torch.logical_and(hasOutletNeighbors, hasBoundaryNeighbors)
+                # indices = torch.arange(state['fluid']['numParticles'], device = state['fluid']['positions'].device)[mask]
+
+                # # print(indices)
+
+                # projectedVelocities = state['fluid']['velocities'].clone()
+                # normal = torch.Tensor([0.,1.]).to(projectedVelocities.device)
+                # projectedVelocities[indices] = projectedVelocities[indices] - torch.einsum('n, d -> nd', torch.einsum('nd, d -> n', state['fluid']['velocities'][indices], normal), normal)
+
+                # dudt_ = -(projectedVelocities - state['fluid']['velocities']) / state['timestep']
+                # dudt[indices] = dudt_[indices]
+                # # state['fluid']['velocities'][indices] = projectedVelocities[indices] - torch.einsum('n, d -> nd', torch.einsum('nd, d -> n', state['fluid']['velocities'][indices], normal), normal)
+
+
 
         if 'boundary' not in state:
             return (state['fluid']['velocities'].clone(), dudt, drhodt), (None, None, None)

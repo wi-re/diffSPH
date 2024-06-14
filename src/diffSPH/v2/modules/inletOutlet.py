@@ -12,9 +12,9 @@ def processOutlet(region, config, perennialState):
 
     if mask.sum() == 0:
         return
-    print(f'Outlet: {mask.sum()} particles removed')
-    print('Current particles:', perennialState['fluid']['positions'].shape[0])
-    print(reducedIndices.shape, reducedIndices)
+    # print(f'Outlet: {mask.sum()} particles removed')
+    # print('Current particles:', perennialState['fluid']['positions'].shape[0])
+    # print(reducedIndices.shape, reducedIndices)
 
     for k in perennialState['fluid'].keys():
         if isinstance(perennialState['fluid'][k], torch.Tensor):
@@ -54,7 +54,7 @@ def mergeStates(oldState, newState):
     return oldState
 
 from diffSPH.v2.finiteDifference import continuousGradient, centralDifferenceStencil
-
+from diffSPH.v2.modules.inletOutlet import continuousGradient, centralDifferenceStencil
 def buildOutletGhostParticles(regions, perennialState, config):
     ghostState = None
 
@@ -121,13 +121,14 @@ def buildOutletGhostParticles(regions, perennialState, config):
         },
         'kernel': config['kernel']
     }
-            
+    # print('...')
     # ghostState['neighborhood'] = neighborSearch(ghostState, perennialState['fluid'], gridConfig, computeKernels=False)
-    ghostState['neighborhood'] = neighborSearch(ghostState, perennialState['fluid'], gridConfig, computeKernels=True)
+    _, ghostState['neighborhood'] = neighborSearch(ghostState, perennialState['fluid'], gridConfig, computeKernels=True)
     # _, ghostState['numNeighbors'] = countUniqueEntries(ghostState['neighborhood']['indices'][0], ghostState['positions'])
     ghostState['numNeighbors'] = ghostState['neighborhood']['numNeighbors']
 
     return ghostState
+
 
 from diffSPH.v2.sphOps import sphOperationStates
 from diffSPH.v2.sphOps import adjunctMatrix, LiuLiuConsistent
