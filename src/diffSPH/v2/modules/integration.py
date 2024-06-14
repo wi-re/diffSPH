@@ -1,6 +1,7 @@
 import torch
 from diffSPH.parameter import Parameter
 from torch.profiler import record_function
+from diffSPH.v2.modules.inletOutlet import continuousGradient, centralDifferenceStencil
 
 def computeCFL(dt, state, config):
     with record_function("CFL"):
@@ -250,13 +251,61 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                     dxdt, dudt, drhodt = None, None, None
                     if fluidUpdate_k1[0] is not None:
                         dxdt = (fluidUpdate_k1[0] + 2 * fluidUpdate_k2[0] + 2 * fluidUpdate_k3[0] + fluidUpdate_k4[0]) / 6
-                        perennialState['fluid']['positions'] += dxdt * dt
                     if fluidUpdate_k1[1] is not None:
                         dudt = (fluidUpdate_k1[1] + 2 * fluidUpdate_k2[1] + 2 * fluidUpdate_k3[1] + fluidUpdate_k4[1]) / 6
-                        perennialState['fluid']['velocities'] += dudt * dt
                     if fluidUpdate_k1[2] is not None:
                         drhodt = (fluidUpdate_k1[2] + 2 * fluidUpdate_k2[2] + 2 * fluidUpdate_k3[2] + fluidUpdate_k4[2]) / 6
+
+                    if 'regions' in config and config['regions'] is not None:
+                    
+                        mirrorRegions = [region for region in config['regions'] if region['type'] == 'mirror']
+                        
+                        for region in mirrorRegions:
+                            for boundarySDF in [reg['sdf'] for reg in config['regions'] if reg['type'] == 'boundary']:
+                                # boundarySDF = boundary_sdf
+                                # outletSDF = outletSDF
+
+
+                                positions = perennialState['fluid']['positions']
+                                velocities = dxdt
+                                inMirrorRegion = region['sdf'](positions) <= 0.0
+
+                                if torch.sum(inMirrorRegion) > 0:
+                                    oldPositions = positions[inMirrorRegion].clone()
+                                    oldVelocities = velocities[inMirrorRegion].clone()
+
+                                    newPositions = positions[inMirrorRegion] + dxdt[inMirrorRegion] * perennialState['dt']
+                                    newVelocities = velocities[inMirrorRegion].clone() + dudt[inMirrorRegion] * dt
+
+                                    # oldPositions[:,1] -= 0.125
+
+                                    boundaryDistance = boundarySDF(newPositions)
+
+                                    grad = -continuousGradient(region['sdf'], oldPositions , stencil = centralDifferenceStencil(1,2), dx = config['particle']['support']*0.01, order = 1)
+                                    grad = grad / (torch.linalg.norm(grad, dim = 1, keepdim = True) + 1e-7)
+                                    # ghostPos = pos - 2 * dist[:,None] * grad
+
+                                    # Calculate parallel component of oldVelocities wrt grad
+                                    parallel_component = torch.sum(oldVelocities * grad, dim=1, keepdim=True) * grad / torch.norm(grad, dim=1, keepdim=True)**2
+                                    orthogonal_component = oldVelocities - parallel_component
+
+                                    dxdt[inMirrorRegion,0] = oldVelocities[:,0] - torch.where(boundaryDistance < 0, orthogonal_component[:,0], 0)
+                                    dxdt[inMirrorRegion,1] = oldVelocities[:,1] - torch.where(boundaryDistance < 0, orthogonal_component[:,1], 0)
+
+                                    parallel_component = torch.sum(dudt[inMirrorRegion] * grad, dim=1, keepdim=True) * grad / torch.norm(grad, dim=1, keepdim=True)**2
+                                    orthogonal_component = oldVelocities - parallel_component
+
+                                    dudt[inMirrorRegion,0] = dudt[inMirrorRegion,0] - torch.where(boundaryDistance < 0, orthogonal_component[:,0], 0)
+                                    dudt[inMirrorRegion,1] = dudt[inMirrorRegion,1] - torch.where(boundaryDistance < 0, orthogonal_component[:,1], 0)
+
+                    if fluidUpdate_k1[0] is not None:
+                        perennialState['fluid']['positions'] += dxdt * dt
+                    if fluidUpdate_k1[1] is not None:
+                        perennialState['fluid']['velocities'] += dudt * dt
+                    if fluidUpdate_k1[2] is not None:
                         perennialState['fluid']['densities'] += drhodt * dt
+
+                    
                     fluidUpdate = (dxdt, dudt, drhodt)
                     if config['boundary']['active']:
                         dxdt, dudt, drhodt = None, None, None

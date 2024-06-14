@@ -135,7 +135,7 @@ from diffSPH.v2.sphOps import adjunctMatrix, LiuLiuConsistent
 def processInlet(perennialState, config, emitter):
     emitterState = emitter['particles']
 
-    emitterNeighborhood = neighborSearch(emitterState, perennialState['fluid'], config, computeKernels=False)
+    _, emitterNeighborhood = neighborSearch(emitterState, perennialState['fluid'], config, computeKernels=False)
 
     distance = emitterNeighborhood['distances']
     i = emitterNeighborhood['indices'][0]

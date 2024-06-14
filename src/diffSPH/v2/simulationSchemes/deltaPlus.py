@@ -298,7 +298,7 @@ def simulationStep(state, config):
         if config['compute']['checkNaN']:
             checkNaN(dudt, 'dudt')
             checkNaN(drhodt, 'drhodt')
-        
+            
 
         if 'regions' in config and  config['regions'] is not None:
             if state['outletGhost'] is not None:
