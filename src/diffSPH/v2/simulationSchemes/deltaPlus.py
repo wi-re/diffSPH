@@ -217,7 +217,7 @@ def simulationStep(state, config):
 
 
         state['fluid']['L'], state['fluid']['L.EVs'] = pinv2x2(state['fluid']['covarianceMatrix'])
-
+    
         if config['compute']['checkNaN']:
             checkNaN(state['fluid']['L'], 'L')
             checkNaN(state['fluid']['L.EVs'], 'L.EVs')

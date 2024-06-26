@@ -12,6 +12,7 @@ def renormalizedDensityGradient(stateA, stateB, neighborhood, simConfig):
         Ls = stateA['L'][i]
 
         normalizedGradients = torch.einsum('ijk,ik->ij', Ls, gradKernel)
+        # normalizedGradients = stateA['normGrad']
 
         return sphOperation(
             (stateA['masses'], stateB['masses']), 

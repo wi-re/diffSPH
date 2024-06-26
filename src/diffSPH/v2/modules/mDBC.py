@@ -124,8 +124,8 @@ def mDBCDensity(perennialState, config):
     ghostParticlePositions = boundaryGhostState['positions']
     relPos = boundaryParticlePositions - ghostParticlePositions
     relDist = torch.linalg.norm(relPos, dim = 1)
-    relDist = torch.clamp(relDist, min = 1e-7, max = config['particle']['support']*3.)
-    relPos = relPos * (relDist / (torch.linalg.norm(relPos, dim = 1) + 1e-7))[:,None]
+    # relDist = torch.clamp(relDist, min = 1e-7, max = config['particle']['support']*3.)
+    # relPos = relPos * (relDist / (torch.linalg.norm(relPos, dim = 1) + 1e-7))[:,None]
 
     boundaryDensity[neighCounts > threshold] = (res[neighCounts > threshold,0] + torch.einsum('nu, nu -> n',(relPos)[neighCounts > threshold, :], res[neighCounts > threshold, 1:] ))
     # boundaryDensity = torch.clamp(boundaryDensity, min = restDensity)

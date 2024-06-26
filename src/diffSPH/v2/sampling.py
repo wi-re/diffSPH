@@ -461,7 +461,7 @@ def sampleNoise(noiseConfig):
 def sampleVelocityField(noiseState, neighborhood):
     gradTerm = sphOperationStates(noiseState, noiseState, (noiseState['potential'], noiseState['potential']), operation = 'gradient', gradientMode='difference', neighborhood=neighborhood)
     velocities = torch.stack([gradTerm[:,1], -gradTerm[:,0]], dim = -1)
-    divergence = sphOperationStates(noiseState, noiseState, (noiseState['velocities'], noiseState['velocities']), operation = 'divergence', neighborhood=neighborhood)
+    divergence = sphOperationStates(noiseState, noiseState, (velocities, velocities), operation = 'divergence', neighborhood=neighborhood)
     return velocities, divergence
 
 def rampDivergenceFree(positions, noise, sdf_func, offset, d0 = 0.25):
@@ -527,6 +527,8 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
     noiseState['densities'] = particlesA.new_ones(particlesA.shape[0]) * config['fluid']['rho0'] 
     noiseState['velocities'] = particlesA.new_zeros(particlesA.shape[0], config['domain']['dim'])
     noiseState['accelerations'] = particlesA.new_zeros(particlesA.shape[0], config['domain']['dim'])
+    if len(sdfs) > 0:
+        noiseState['distances'] = particlesA.new_ones(particlesA.shape[0]) * np.inf
 
     if randomizeParticles:
         baseShiftingConfig = copy.deepcopy(config['shifting'])
@@ -595,12 +597,30 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
 
     noiseState['neighborhood'] = fluidNeighborhood
     # printState(noiseState)
-    for sdf in sdfs:
+
+
+    mask = torch.ones_like(noiseState['areas'], dtype = torch.bool)
+    fluid_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'fluid' ]   
+    mask = None
+    if len(fluid_sdfs) > 0:
+        mask = torch.zeros_like(noiseState['areas'], dtype = torch.bool)
+
+        for sdf_func in fluid_sdfs:
+            _, maskA, sdfValues, _ = filterParticlesWithSDF(particlesA, sdf_func, noiseState['supports'][0], -1e-4)
+            mask = mask | maskA
+            noiseState['distances'] = torch.min(noiseState['distances'], sdfValues)
+        mask = mask.to(config['compute']['device'])
+    noiseState['velocities'][~mask, :] = 0
+
+    boundary_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'boundary' ]   
+    for sdf in boundary_sdfs:
         noiseState['potential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFrees')
     noiseState['velocities'], noiseState['divergence'] = sampleVelocityField(noiseState,noiseState['neighborhood'])
-    mask = torch.ones_like(noiseState['potential'], dtype = torch.bool)
-    for sdf_func in sdfs:
-        _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
+    if mask is None:
+        mask = torch.ones_like(noiseState['potential'], dtype = torch.bool)
+    for sdf_func in boundary_sdfs:
+        # _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
+        _, maskA, _, _ = filterParticlesWithSDF(particlesA, sdf, config['particle']['support'], -1e-4)
         mask = mask & maskA
     noiseState['velocities'][~mask, :] = 0
 
