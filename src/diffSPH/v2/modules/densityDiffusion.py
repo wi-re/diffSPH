@@ -55,7 +55,7 @@ def computeDensityDeltaTerm(stateA, stateB, neighborhood, simConfig, schemeOverr
         if scheme == 'deltaSPH':
             grad_ij = stateA['gradRho^L'][i] + stateB['gradRho^L'][j]
             rho_ij = 2 * (stateB['densities'][j] - stateA['densities'][i]) / (rij + 1e-6 * neighborhood['supports'])
-            psi_ij = -rho_ij.view(-1,1) * neighborhood['vectors'] - grad_ij
+            psi_ij = -rho_ij.view(-1,1) * neighborhood['vectors'] + grad_ij
         elif scheme == 'denormalized':
             grad_ij = stateA['gradRho'][i] + stateB['gradRho'][j]
             rho_ij = 2 * (stateB['densities'][j] - stateA['densities'][i]) / (rij + 1e-6 * neighborhood['supports'])

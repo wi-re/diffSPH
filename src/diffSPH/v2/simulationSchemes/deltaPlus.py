@@ -210,7 +210,7 @@ def simulationStep(state, config):
 
     with record_function("[SPH] - deltaSPH (5 - Normalization Matrices)"):
         # state['fluid']['covarianceMatrix'], _ = callModule(state, computeCovarianceMatrices, config, 'fluidwBoundary')
-        state['fluid']['covarianceMatrix'], _ = callModule(state, computeCovarianceMatrices, config, 'fluid')
+        state['fluid']['covarianceMatrix'], _ = callModule(state, computeCovarianceMatrices, config, 'fluidwBoundary')
         if config['compute']['checkNaN']:
             checkNaN(state['fluid']['covarianceMatrix'], 'covarianceMatrix')
         state['fluid']['covarianceMatrix'][state['fluid']['numNeighbors'] < 4,:,:] = torch.eye(2, dtype = state['fluid']['covarianceMatrix'].dtype, device = state['fluid']['covarianceMatrix'].device)[None,:,:]
@@ -229,8 +229,8 @@ def simulationStep(state, config):
         if config['compute']['checkNaN']:
             checkNaN(state['fluid']['gradRho^L'], 'gradRho^L')
 
-        # if config['boundary']['active']:
-            # state['fluid']['gradRho^L'] += callModule(state, densityGradient, config, 'boundaryToFluid')[0]
+        if config['boundary']['active']:
+            state['fluid']['gradRho^L'] += callModule(state, densityGradient, config, 'boundaryToFluid')[0]
 
 
         # state['boundary']['gradRho^L'] = callModule(state, densityGradient, config, 'boundary')[1]
@@ -240,21 +240,22 @@ def simulationStep(state, config):
         state['fluid']['densityDiffusion'], _ = callModule(state, computeDensityDeltaTerm, config, 'fluid')
         if config['compute']['checkNaN']:
             checkNaN(state['fluid']['densityDiffusion'], 'densityDiffusion')
+        # config['diffusion']['densityScheme'] = 'deltaSPH
         # state['fluid']['densityDiffusion'] += callModule(state, computeDensityDeltaTerm, config, 'boundaryToFluid')[0]
 
         # state['fluid']['velocityDiffusion'], _ = callModule(state, computeViscosity, config, 'fluid')
         # torch.cuda.synchronize()
         if config['boundary']['active']:
             # state['fluid']['velocityDiffusion'], _ = callModule(state, computeViscosity, config, 'fluid')
-            state['fluid']['velocityDiffusion'], state['boundary']['velocityDiffusion'] = callModule(state, computeViscosity, config, 'all')
+            state['fluid']['velocityDiffusion'], state['boundary']['velocityDiffusion'] = callModule(state, computeViscosity, config, 'fluid')
             if config['compute']['checkNaN']:
                 checkNaN(state['fluid']['velocityDiffusion'], 'velocityDiffusion')
-                checkNaN(state['boundary']['velocityDiffusion'], 'boundary - velocityDiffusion')
+                # checkNaN(state['boundary']['velocityDiffusion'], 'boundary - velocityDiffusion')
 
             state['fluid']['momentumEquation'], state['boundary']['momentumEquation'] = callModule(state, computeMomentumEquation, config, 'all')
             if config['compute']['checkNaN']:
                 checkNaN(state['fluid']['momentumEquation'], 'momentumEquation')
-                checkNaN(state['boundary']['momentumEquation'], 'boundary - momentumEquation')
+                # checkNaN(state['boundary']['momentumEquation'], 'boundary - momentumEquation')
         else:
             state['fluid']['velocityDiffusion'], _ = callModule(state, computeViscosity, config, 'fluid')
             if config['compute']['checkNaN']:
@@ -311,6 +312,11 @@ def simulationStep(state, config):
     with record_function("[SPH] - deltaSPH (10 - Integration)"):
         dudt = state['fluid']['pressureAccel'] + state['fluid']['gravityAccel'] + state['fluid']['velocityDiffusion']
         drhodt = state['fluid']['momentumEquation'] + state['fluid']['densityDiffusion']
+
+        print('Momentum Term: Mean - ', state['fluid']['momentumEquation'].mean(), 'Max - ', state['fluid']['momentumEquation'].max(), 'Min - ', state['fluid']['momentumEquation'].min(), 'Sum: ', state['fluid']['momentumEquation'].sum())
+        print('Density Term: Mean - ', state['fluid']['densityDiffusion'].mean(), 'Max - ', state['fluid']['densityDiffusion'].max(), 'Min - ', state['fluid']['densityDiffusion'].min(), 'Sum: ', state['fluid']['densityDiffusion'].sum())
+        
+
         if config['compute']['checkNaN']:
             checkNaN(dudt, 'dudt')
             checkNaN(drhodt, 'drhodt')
@@ -350,7 +356,7 @@ def simulationStep(state, config):
             return (state['fluid']['velocities'].clone(), dudt, drhodt), (None, None, None)
         # torch.cuda.synchronize()   
         boundary_dudt = state['boundary']['pressureAccel'] #+ state['boundary']['velocityDiffusion']
-        boundary_drhodt = state['boundary']['momentumEquation'] *0
+        boundary_drhodt = torch.zeros_like(state['boundary']['densities'])#state['boundary']['momentumEquation'] *0
 
         return (state['fluid']['velocities'].clone(), dudt, drhodt), (state['boundary']['velocities'].clone(), None, boundary_drhodt)
 # from diffSPH.parameter import Parameter
