@@ -93,7 +93,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
     with record_function("[Simulation] - Integrate"):
         dt = config['timestep']['dt']
         scheme = config['integration']['scheme']
-        assert scheme in ['semiImplicitEuler', 'explicitEuler', 'verlet', 'leapfrog', 'RK4'], f"Integration scheme {scheme} not recognized"
+        assert scheme in ['symplecticEuler', 'semiImplicitEuler', 'explicitEuler', 'verlet', 'leapfrog', 'RK4'], f"Integration scheme {scheme} not recognized"
         fluidUpdate, boundaryUpdate = None, None
 
         tempState = createTempState(perennialState, None)
@@ -323,6 +323,59 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
 
 
                         boundaryUpdate = (dxdt, dudt, drhodt)
+                        # perennialState['fluid']['densities'] = tempState['fluid']['densities']
+                    # return tempState, dxdt, dudt, drhodt
+                    # perennialState['fluid']['velocities'] += (k1 + 2*k2 + 2*k3 + k4) * dt / 6
+                    # dudt = (k1 + 2*k2 + 2*k3 + k4) * dt / 6
+        elif scheme == 'symplecticEuler':
+            with record_function("[Simulation] - Symplectic Euler"):
+                    fluidUpdate_initial, boundaryUpdate_initial = simulationStep(tempState, config)
+
+                    tempState = createTempState(perennialState, tempState)
+                    updateStates(dt / 2, (fluidUpdate_initial, boundaryUpdate_initial), tempState['fluid'], tempState['boundary'] if 'boundary' in tempState else None)
+                    
+                    fluidUpdate_halfStep, boundaryUpdate_halfStep = simulationStep(tempState, config)
+
+                    
+                    dxdt, dudt, drhodt = None, None, None
+
+                    dudt = fluidUpdate_halfStep[1]
+
+                    newVelocities = perennialState['fluid']['velocities'] + dudt * dt
+
+                    dxdt = 0.5 * (perennialState['fluid']['velocities'] + newVelocities) * dt
+
+                    newPositions = perennialState['fluid']['positions'] + dxdt
+
+                    epsilon_rho = - dt * fluidUpdate_halfStep[2] / tempState['fluid']['densities']
+
+                    newDensity = perennialState['fluid']['densities'] * (2 - epsilon_rho)/(2+epsilon_rho)
+
+                    if fluidUpdate_halfStep[0] is not None:
+                        perennialState['fluid']['positions'] = newPositions
+                    if fluidUpdate_halfStep[1] is not None:
+                        perennialState['fluid']['velocities'] = newVelocities
+                    if fluidUpdate_halfStep[2] is not None:
+                        perennialState['fluid']['densities'] = newDensity
+
+                    
+                    fluidUpdate = (dxdt, dudt, epsilon_rho)
+                    # if config['boundary']['active']:
+                    #     dxdt, dudt, drhodt = None, None, None
+                    #     if boundaryUpdate_k1[0] is not None:
+                    #         dxdt = (boundaryUpdate_k1[0] + 2 * boundaryUpdate_k2[0] + 2 * boundaryUpdate_k3[0] + boundaryUpdate_k4[0]) / 6
+                    #         perennialState['boundary']['positions'] += dxdt * dt
+                    #     if boundaryUpdate_k1[1] is not None:
+                    #         dudt = (boundaryUpdate_k1[1] + 2 * boundaryUpdate_k2[1] + 2 * boundaryUpdate_k3[1] + boundaryUpdate_k4[1]) / 6
+                    #         perennialState['boundary']['velocities'] += dudt * dt
+                    #     if boundaryUpdate_k1[2] is not None:
+                    #         drhodt = (boundaryUpdate_k1[2] + 2 * boundaryUpdate_k2[2] + 2 * boundaryUpdate_k3[2] + boundaryUpdate_k4[2]) / 6
+                    #         perennialState['boundary']['densities'] += drhodt * dt
+
+
+                        # boundaryUpdate = (dxdt, dudt, drhodt)
+
+
                         # perennialState['fluid']['densities'] = tempState['fluid']['densities']
                     # return tempState, dxdt, dudt, drhodt
                     # perennialState['fluid']['velocities'] += (k1 + 2*k2 + 2*k3 + k4) * dt / 6

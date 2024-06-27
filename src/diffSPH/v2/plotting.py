@@ -546,16 +546,19 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
                 pos_x = torch.cat([visualizationState['fluid']['positions'], visualizationState['boundary']['positions']], dim = 0)
         else:
             if which == 'fluid' or scBoundary is None:
+                inputQuantity = quantity[:visualizationState['fluid']['numParticles']]
                 if inputQuantity.shape[0] != visualizationState['fluid']['numParticles']:
                     raise ValueError('Quantity does not have the same number of particles as the fluid')
                 inputQuantity = quantity[:visualizationState['fluid']['numParticles']]
                 pos_x = visualizationState['fluid']['positions']
             elif which == 'boundary':
+                inputQuantity = quantity[visualizationState['fluid']['numParticles']:]
                 if inputQuantity.shape[0] != visualizationState['boundary']['numParticles']:
                     raise ValueError('Quantity does not have the same number of particles as the boundary')
                 inputQuantity = quantity[visualizationState['fluid']['numParticles']:]
                 pos_x = visualizationState['boundary']['positions']
             else:
+                inputQuantity = quantity
                 if inputQuantity.shape[0] != visualizationState['fluid']['numParticles'] + visualizationState['boundary']['numParticles']:
                     raise ValueError('Quantity does not have the same number of particles as the fluid and boundary combined')
                 inputQuantity = quantity
