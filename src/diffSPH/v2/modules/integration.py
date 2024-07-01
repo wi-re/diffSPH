@@ -110,14 +110,41 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
 
         if scheme == 'semiImplicitEuler':
             with record_function("[Simulation] - Semi-Implicit Euler"):
-                fluidUpdate, boundaryUpdate = simulationStep(tempState, config)
-                if fluidUpdate[1] is not None:
-                    perennialState['fluid']['velocities'] += fluidUpdate[1] * dt                
-                if config['boundary']['active']:
-                    if boundaryUpdate[1] is not None:
-                        perennialState['boundary']['velocities'] += boundaryUpdate[1] * dt
-                dxdt, dudt, drhodt = fluidUpdate
-                updateStates(dt, (fluidUpdate, boundaryUpdate), perennialState['fluid'], perennialState['boundary'] if 'boundary' in perennialState else None)
+                fluidUpdate_initial, boundaryUpdate_initial = simulationStep(tempState, config)
+
+                dxdt, dudt, drhodt = None, None, None
+
+                dudt = fluidUpdate_initial[1]
+
+                newVelocities = perennialState['fluid']['velocities'] + dudt * dt
+
+                dxdt = newVelocities * dt
+
+                newPositions = perennialState['fluid']['positions'] + dxdt
+
+                if fluidUpdate_initial[2] is not None:
+                    epsilon_rho = - dt * fluidUpdate_initial[2] / tempState['fluid']['densities']
+
+                # newDensity = perennialState['fluid']['densities'] * (2 - epsilon_rho)/(2+epsilon_rho)
+
+                if fluidUpdate_initial[0] is not None:
+                    perennialState['fluid']['positions'] = newPositions
+                if fluidUpdate_initial[1] is not None:
+                    perennialState['fluid']['velocities'] = newVelocities
+                if fluidUpdate_initial[2] is not None:
+                    perennialState['fluid']['densities'] = newDensity
+
+                
+                fluidUpdate = (dxdt, dudt, epsilon_rho if fluidUpdate_initial[2] is not None else None)
+
+                # fluidUpdate, boundaryUpdate = simulationStep(tempState, config)
+                # if fluidUpdate[1] is not None:
+                #     perennialState['fluid']['velocities'] += fluidUpdate[1] * dt                
+                # if config['boundary']['active']:
+                #     if boundaryUpdate[1] is not None:
+                #         perennialState['boundary']['velocities'] += boundaryUpdate[1] * dt
+                # dxdt, dudt, drhodt = fluidUpdate
+                # updateStates(dt, (fluidUpdate, boundaryUpdate), perennialState['fluid'], perennialState['boundary'] if 'boundary' in perennialState else None)
 
         elif scheme == 'explicitEuler':
             with record_function("[Simulation] - Explicit Euler"):
@@ -388,6 +415,9 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                 for kk in perennialState[k].keys():
                     if kk not in ['velocities', 'positions', 'densities']:
                         temp = perennialState[k][kk]
+                        perennialState[k][kk] = tempState[k][kk]
+                        tempState[k][kk] = temp
+                    if kk == 'densities' and drhodt is None:
                         perennialState[k][kk] = tempState[k][kk]
                         tempState[k][kk] = temp
                 # if k not in ['fluid']['velocities', 'fluid']['positions', 'fluid']['densities']:
