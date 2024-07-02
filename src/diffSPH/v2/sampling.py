@@ -38,7 +38,7 @@ def optimizeArea(arg: Union[float, torch.Tensor], packing, dtype, device : torch
     loss = 1
     for i in range(maxIter):
         arg.requires_grad = True
-        eval = evalArea(arg, packing, torch.float32, 'cpu', targetNeighbors, kernel, dim)
+        eval = evalArea(arg.cpu(), packing.cpu(), torch.float32, 'cpu', targetNeighbors, kernel, dim)
         loss = (1-eval)**2
         loss.backward()
         arg = (arg - arg * arg.grad / targetNeighbors * 1e-3).detach()
@@ -46,7 +46,7 @@ def optimizeArea(arg: Union[float, torch.Tensor], packing, dtype, device : torch
         if loss < thresh:
             break
     # print('arg', arg)
-    eval = evalArea(arg, packing, torch.float32, 'cpu', targetNeighbors, kernel, dim)
+    eval = evalArea(arg.cpu(), packing.cpu(), torch.float32, 'cpu', targetNeighbors, kernel, dim)
     # print('eval', eval, (1-eval)**2)
     return arg, eval, (1-eval)**2
     # print(eval)
