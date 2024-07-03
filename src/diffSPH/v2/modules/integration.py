@@ -409,6 +409,12 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                     # dudt = (k1 + 2*k2 + 2*k3 + k4) * dt / 6
         with record_function("[Simulation] - Update Perennial State"):
             # sync perennialState with tempState   
+            for k in tempState.keys():
+                if not isinstance(tempState[k], dict):
+                    continue
+                for kk in tempState[k].keys():
+                    if kk in ['pressureIncompressible', 'pressureDivergence', 'pressureB', 'convergence_density', 'convergence_divergence', 'pressures']:
+                        perennialState[k][kk] = tempState[k][kk]
             for k in perennialState.keys():
                 if not isinstance(perennialState[k], dict):
                     continue
@@ -419,7 +425,8 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                         tempState[k][kk] = temp
                     if kk == 'densities' and drhodt is None:
                         perennialState[k][kk] = tempState[k][kk]
-                        tempState[k][kk] = temp
+                        # tempState[k][kk] = temp
+
                 # if k not in ['fluid']['velocities', 'fluid']['positions', 'fluid']['densities']:
                 #     temp = perennialState[k]
                 #     perennialState[k] = tempState[k]

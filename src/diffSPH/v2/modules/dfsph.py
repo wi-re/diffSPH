@@ -4,91 +4,118 @@ from diffSPH.v2.math import scatter_sum
 from torch.profiler import record_function
 
 
-def computeAlpha(simulationState, config):
-        fluidNeighbors = simulationState['fluid']['neighborhood']
-        (i, j) = fluidNeighbors['indices']
+def computeAlpha(stateA, stateB, config, neighborhood, density = True):
+    dt = config['timestep']['dt']**2 if density else config['timestep']['dt']
 
-        grad = fluidNeighbors['gradients']
-        grad2 = torch.einsum('nd, nd -> n', grad, grad)
+    fluidNeighbors = neighborhood# simulationState['fluid']['neighborhood']
+    (i, j) = fluidNeighbors['indices']
 
-        term1 = simulationState['fluid']['actualArea'][j][:,None] * grad
-        term2 = (simulationState['fluid']['actualArea']**2 / (simulationState['fluid']['areas'] * config['fluid']['rho0']))[j] * grad2
+    grad = fluidNeighbors['gradients']
+    grad2 = torch.einsum('nd, nd -> n', grad, grad)
 
-        kSum1 = scatter_sum(term1, i, dim=0, dim_size=simulationState['fluid']['areas'].shape[0])
-        kSum2 = scatter_sum(term2, i, dim=0, dim_size=simulationState['fluid']['areas'].shape[0])
+    term1 = stateB['actualArea'][j][:,None] * grad
+    term2 = (stateB['actualArea']**2 / (stateB['areas'] * config['fluid']['rho0']))[j] * grad2
 
-        fac = - config['timestep']['dt'] **2 * simulationState['fluid']['actualArea']
-        mass = simulationState['fluid']['areas'] * config['fluid']['rho0']
-        alpha = fac / mass * torch.einsum('nd, nd -> n', kSum1, kSum1) + fac * kSum2
-        # alpha = torch.clamp(alpha, -1, -1e-7)
+    kSum1 = scatter_sum(term1, i, dim=0, dim_size=stateA['areas'].shape[0])
+    kSum2 = scatter_sum(term2, i, dim=0, dim_size=stateA['areas'].shape[0])
 
-        return alpha
+    fac = - dt * stateA['actualArea']
+    mass = stateA['areas'] * config['fluid']['rho0']
+    alpha = fac / mass * torch.einsum('nd, nd -> n', kSum1, kSum1) + fac * kSum2
+    # alpha = torch.clamp(alpha, -1, -1e-7)
+
+    return alpha
 
 
-def computeSourceTerm(simulationState, config):
-    fac = config['timestep']['dt'] 
-    div = sphOperationStates(simulationState['fluid'], simulationState['fluid'], (simulationState['fluid']['predictedVelocities'], simulationState['fluid']['predictedVelocities']), operation = 'divergence', gradientMode = 'difference', neighborhood = simulationState['fluid']['neighborhood'])
+def computeSourceTerm(stateA, stateB, config, neighborhood, density = True):
+    fac = config['timestep']['dt'] if density else 1.0
+    div = sphOperationStates(stateA, stateB, (stateA['predictedVelocities'], stateB['predictedVelocities']), operation = 'divergence', gradientMode = 'difference', neighborhood = neighborhood)
     return fac * div
 
-def computePressureAcceleration(simulationState, config):
-    stateA = simulationState['fluid']
-    stateB = simulationState['fluid']
-    neighborhood = stateA['neighborhood']
+def computePressureAcceleration(stateA, stateB, config, neighborhood):
 
     return -sphOperationStates(stateA, stateB, (stateA['pressureB'], stateB['pressureB']), operation = 'gradient', gradientMode='summation', neighborhood= neighborhood) / stateA['densities'].view(-1,1)
     
-def updatePressure(simulationState, config):
-    stateA = simulationState['fluid']
-    stateB = simulationState['fluid']
-    neighborhood = stateA['neighborhood']
+def updatePressure(stateA, stateB, config, neighborhood, density = True):
 
-    dt = config['timestep']['dt']
-    kernelSum = -dt**2 * sphOperationStates(stateA, stateB, (stateA['pressureAccel'], stateB['pressureAccel']), operation = 'divergence', gradientMode='difference', neighborhood= neighborhood)
+    dt = config['timestep']['dt']**2 if density else config['timestep']['dt']
+    kernelSum = -dt * sphOperationStates(stateA, stateB, (stateA['pressureAccel'], stateB['pressureAccel']), operation = 'divergence', gradientMode='difference', neighborhood= neighborhood)
 
     sourceTerm = stateA['sourceTerm']
     residual = kernelSum - sourceTerm
-    pressure = stateA['pressureA'] + 0.3 * (sourceTerm - kernelSum) / stateA['alpha']
-    pressure = torch.max(pressure, torch.zeros_like(pressure))
+    pressure = stateA['pressureA'] + config['dfsph']['omega'] * (sourceTerm - kernelSum) / stateA['alpha']
+    if density:
+        pressure = torch.max(pressure, torch.zeros_like(pressure))
 
     return pressure, residual
 
-def dfsphSolve(simulationState, config):
-    advection_acceleration = simulationState['fluid']['gravityAccel'] + simulationState['fluid']['velocityDiffusion']
+def dfsphSolve(stateA, stateB, neighborhood, config):
+    solveDensity = config['dfsph']['sourceTerm'] == 'density'
+    advection_acceleration = stateA['advection']#stateA['gravityAccel'] + stateA['velocityDiffusion']
 
-    simulationState['fluid']['predictedAcceleration'] = torch.zeros_like(simulationState['fluid']['velocities'])    
-    simulationState['fluid']['predictedVelocities'] = simulationState['fluid']['velocities'] + config['timestep']['dt'] * advection_acceleration
+    stateA['predictedAcceleration'] = torch.zeros_like(stateA['velocities'])    
+    stateA['predictedVelocities'] = stateA['velocities'] + config['timestep']['dt'] * advection_acceleration
 
-    simulationState['fluid']['actualArea'] = simulationState['fluid']['masses'] / simulationState['fluid']['densities']
+    stateA['actualArea'] = stateA['masses'] / stateA['densities']
 
-    simulationState['fluid']['alpha'] = computeAlpha(simulationState, config)
 
-    simulationState['fluid']['sourceTerm'] = 1 - simulationState['fluid']['areas']  / simulationState['fluid']['actualArea'] + computeSourceTerm(simulationState, config)
+    if config['dfsph']['sourceTerm'] == 'density':
+        stateA['sourceTerm'] = 1 - stateA['areas']  / stateA['actualArea'] - computeSourceTerm(stateA, stateB, config, neighborhood, density = solveDensity)
+    else:
+        stateA['sourceTerm'] = computeSourceTerm(stateA, stateB, config, neighborhood, density = solveDensity) #/ config['timestep']['dt']
 
-    simulationState['fluid']['pressureB'] = torch.zeros(simulationState['fluid']['numParticles'], device = config['compute']['device'])
-    simulationState['fluid']['pressureA'] = torch.zeros(simulationState['fluid']['numParticles'], device = config['compute']['device'])
+    stateA['pressureB'] = torch.zeros(stateA['numParticles'], device = config['compute']['device'])
+    stateA['pressureA'] = torch.zeros(stateA['numParticles'], device = config['compute']['device'])
 
+    if 'pressureIncompressible' in stateA and solveDensity:
+        stateA['pressureB'] = 0.75 * stateA['pressureIncompressible']
+        stateA['pressureA'] = 0.75 * stateA['pressureIncompressible']
+    elif 'pressureDivergence' in stateA and not solveDensity:
+        stateA['pressureB'] = 0.75 * stateA['pressureDivergence']
+        stateA['pressureA'] = 0.75 * stateA['pressureDivergence']
 
     errors = []
     pressures = []
     i = 0
     error = 0.
-    minIters = 2
-    maxIters = 256
-    errorThreshold = 1e-3
+    minIters = config['dfsph']['minIters']
+    maxIters = config['dfsph']['maxIters']
+    errorThreshold = config['dfsph']['errorThreshold']
+   # fac = config['timestep']['dt'] if config['dfsph']['sourceTerm'] == 'divergence' else 1.0
 
+    stateA['alpha'] = computeAlpha(stateA, stateB, config, neighborhood, density = solveDensity)# / fac
 
     while i < maxIters and (i < minIters or error > errorThreshold):
-        simulationState['fluid']['pressureAccel'] = computePressureAcceleration(simulationState, config)
-        simulationState['fluid']['pressureA'][:] = simulationState['fluid']['pressureB'].clone()
+        stateA['pressureAccel'] = computePressureAcceleration(stateA, stateB, config, neighborhood)
+        stateA['pressureA'][:] = stateA['pressureB'].clone()
         
-        simulationState['fluid']['pressureB'], simulationState['fluid']['residual'] = updatePressure(simulationState, config)
-        error = torch.mean(torch.clamp(simulationState['fluid']['residual'], min = -errorThreshold))
+        stateA['pressureB'], stateA['residual'] = updatePressure(stateA, stateB, config, neighborhood, density = solveDensity)
+        # if config['dfsph']['sourceTerm'] == 'density':
+            # stateA['pressureB'] = torch.max(stateA['pressureB'], torch.zeros_like(stateA['pressureB']))
+            # error = torch.mean(torch.clamp(stateA['residual'], min = -errorThreshold))
+        error = torch.mean(torch.clamp(stateA['residual'] / config['fluid']['rho0'], min = -errorThreshold))
         
         errors.append(error.detach().cpu().item())
-        # print(f'{i:2d} -> {error.detach().cpu().item():+.4e}, pressure mean: {simulationState["fluid"]["pressureB"].mean().detach().cpu().item():+.4e}')
+        # print(f'{i:2d} -> {error.detach().cpu().item():+.4e}, pressure mean: {stateA["pressureB"].mean().detach().cpu().item():+.4e}')
         # break
-        pressures.append(simulationState['fluid']['pressureB'].mean().detach().cpu().item())
+        pressures.append(stateA['pressureB'].mean().detach().cpu().item())
 
         i += 1
 
-    return errors, pressures, computePressureAcceleration(simulationState, config), simulationState['fluid']['pressureB']
+    a_p = computePressureAcceleration(stateA, stateB, config, neighborhood)
+
+    stateA[f'convergence_{config["dfsph"]["sourceTerm"]}'] = errors
+
+    return a_p
+
+
+from diffSPH.parameter import Parameter
+def getParameters():
+    return [
+        Parameter('dfsph', 'minIters', int, 2, required = False,export = False, hint = 'Minimum number of iterations'),
+        Parameter('dfsph', 'maxIters', int, 256, required = False,export = False, hint = 'Maximum number of iterations'),
+        Parameter('dfsph', 'errorThreshold', float, 1e-4, required = False,export = False, hint = 'Error threshold for pressure solver'),
+        Parameter('dfsph', 'omega', float, 0.5, required = False,export = False, hint = 'Relaxation factor for pressure solver'),
+        Parameter('dfsph', 'sourceTerm', str, 'density', required = False,export = False, hint = 'Source term for pressure solver')
+
+    ]

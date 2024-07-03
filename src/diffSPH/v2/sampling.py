@@ -502,7 +502,6 @@ def filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree'):
 import copy
 from diffSPH.v2.modules.shifting import solveShifting
 from diffSPH.v2.util import printState
-
 def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = False):
     particlesA, volumeA = sampleRegular(config['particle']['dx'], config['domain']['dim'], config['domain']['minExtent'], config['domain']['maxExtent'], config['kernel']['targetNeighbors'], config['simulation']['correctArea'], config['kernel']['function'])
     particlesA = particlesA.to(config['compute']['device'])
@@ -593,40 +592,186 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
         noiseState['potential'] = noiseSimplex.flatten().to(particlesA.device)
 
 
+
+
+    # mask = torch.ones_like(noiseState['areas'], dtype = torch.bool)
+    # fluid_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'fluid' ]   
+    # mask = None
+    # if len(fluid_sdfs) > 0:
+    #     mask = torch.zeros_like(noiseState['areas'], dtype = torch.bool)
+
+    #     for sdf_func in fluid_sdfs:
+    #         _, maskA, sdfValues, _ = filterParticlesWithSDF(particlesA, sdf_func, noiseState['supports'][0], -1e-4)
+    #         mask = mask | maskA
+    #         noiseState['distances'] = torch.min(noiseState['distances'], sdfValues)
+    #     mask = mask.to(config['compute']['device'])
+    # noiseState['velocities'][~mask, :] = 0
+
+    samplings = None
+    if samplings is None:   
+        samplings = ['regular' for _ in sdfs]
+    if not isinstance(samplings, List):
+        samplings = [samplings for _ in sdfs]
+
+    boundary_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'boundary' ]   
+    if len(boundary_sdfs) > 0:
+        boundaryParticles, boundaryVolumes, boundaryDistances, boundaryNormals, boundaryBodyIDs, fluidMask = sampleBoundaryParticles(noiseState, boundary_sdfs, config, samplings)
+        for k in noiseState.keys():
+            if isinstance(noiseState[k], torch.Tensor):
+                noiseState[k] = noiseState[k][fluidMask]
+    noiseState['numParticles'] = noiseState['positions'].shape[0]
+            
     _, fluidNeighborhood = neighborSearch(noiseState, noiseState, config)
 
     noiseState['neighborhood'] = fluidNeighborhood
     # printState(noiseState)
+    
+    # printState(noiseState)
+
+    # for sdf in boundary_sdfs:
+    #     # _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
+        # noiseState['potential'] = filterPotentialField(operatorDict['invert'](sdf), noiseState, config, kind = 'divergenceFree')
+        # noiseState['potential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree')
 
 
-    mask = torch.ones_like(noiseState['areas'], dtype = torch.bool)
-    fluid_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'fluid' ]   
-    mask = None
-    if len(fluid_sdfs) > 0:
-        mask = torch.zeros_like(noiseState['areas'], dtype = torch.bool)
-
-        for sdf_func in fluid_sdfs:
-            _, maskA, sdfValues, _ = filterParticlesWithSDF(particlesA, sdf_func, noiseState['supports'][0], -1e-4)
-            mask = mask | maskA
-            noiseState['distances'] = torch.min(noiseState['distances'], sdfValues)
-        mask = mask.to(config['compute']['device'])
-    noiseState['velocities'][~mask, :] = 0
-
-    boundary_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'boundary' ]   
-    for sdf in boundary_sdfs:
-        noiseState['potential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFrees')
-    noiseState['velocities'], noiseState['divergence'] = sampleVelocityField(noiseState,noiseState['neighborhood'])
-    if mask is None:
-        mask = torch.ones_like(noiseState['potential'], dtype = torch.bool)
-    for sdf_func in boundary_sdfs:
+    noiseState['velocities'], noiseState['divergence'] = sampleVelocityField(noiseState, noiseState['neighborhood'])
+    # if mask is None:
+        # mask = torch.ones_like(noiseState['potential'], dtype = torch.bool)
+    # for sdf_func in boundary_sdfs:
         # _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
-        _, maskA, _, _ = filterParticlesWithSDF(particlesA, sdf, config['particle']['support'], -1e-4)
-        mask = mask & maskA
-    noiseState['velocities'][~mask, :] = 0
+        # _, maskA, _, _ = filterParticlesWithSDF(particlesA, sdf, config['particle']['support'], -1e-4)
+        # mask = mask & maskA
+    # noiseState['velocities'][~mask, :] = 0
 
     _, noiseState['numNeighbors'] = countUniqueEntries(fluidNeighborhood['indices'][0], noiseState['positions'])
 
-    return noiseState, mask
+    return noiseState, None
+
+
+# def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = False):
+#     particlesA, volumeA = sampleRegular(config['particle']['dx'], config['domain']['dim'], config['domain']['minExtent'], config['domain']['maxExtent'], config['kernel']['targetNeighbors'], config['simulation']['correctArea'], config['kernel']['function'])
+#     particlesA = particlesA.to(config['compute']['device'])
+#     volumeA = volumeA.to(config['compute']['device'])
+    
+#     area = (4 / config['particle']['nx']**2)
+#     area = volumeA
+#     grid, noiseSimplex = sampleNoise(noiseConfig)
+
+#     noiseState = {}
+#     noiseState['numParticles'] = particlesA.shape[0]
+#     # noiseState['timestep'] = 0
+#     # noiseState['time'] = 0.
+#     # noiseState['dt'] = config['timestep']['dt']
+#     noiseState['positions'] = particlesA
+#     noiseState['areas'] = particlesA.new_ones(particlesA.shape[0]) * area
+#     noiseState['pressures'] = particlesA.new_zeros(particlesA.shape[0])
+#     noiseState['divergence'] = particlesA.new_zeros(particlesA.shape[0])
+#     noiseState['masses'] = noiseState['areas'] * config['fluid']['rho0']
+#     noiseState['supports'] = volumeToSupport(area, config['kernel']['targetNeighbors'], config['domain']['dim']) * particlesA.new_ones(particlesA.shape[0])
+#     noiseState['index'] = torch.arange(particlesA.shape[0], device = particlesA.device)
+#     noiseState['densities'] = particlesA.new_ones(particlesA.shape[0]) * config['fluid']['rho0'] 
+#     noiseState['velocities'] = particlesA.new_zeros(particlesA.shape[0], config['domain']['dim'])
+#     noiseState['accelerations'] = particlesA.new_zeros(particlesA.shape[0], config['domain']['dim'])
+#     if len(sdfs) > 0:
+#         noiseState['distances'] = particlesA.new_ones(particlesA.shape[0]) * np.inf
+
+#     if randomizeParticles:
+#         baseShiftingConfig = copy.deepcopy(config['shifting'])
+
+#         config['shifting']['solver'] = 'BiCGStab_wJacobi'
+#         # config['shifting']['solver'] = 'BiCGStab'
+#         config['shifting']['maxIterations'] = 64
+#         config['shifting']['freeSurface'] = False
+#         config['shifting']['summationDensity'] = False
+#         config['shifting']['scheme'] = 'IPS'
+#         config['shifting']['maxSolveIter'] = 128
+#         config['shifting']['initialization'] = 'zero'
+#         config['shifting']['threshold'] = 0.5
+
+#         positions = torch.rand(noiseState['positions'].shape, device = noiseState['positions'].device) * 2 - 1
+#         shiftState = {
+#                 'positions': positions,
+#                 'areas': noiseState['areas'],
+#                 'densities': noiseState['densities'],\
+#                 'numParticles': noiseState['numParticles'],
+#                 'velocities': noiseState['velocities'],
+#                 'masses': noiseState['masses'],
+#                 'supports': noiseState['supports'],
+#             }
+#         dx, states = solveShifting({
+#             'fluid':shiftState
+#         }, config)
+#         shiftState['positions'] = positions + dx
+
+#         config['shifting'] = baseShiftingConfig
+
+#         x = shiftState['positions'].clone()
+
+#         periodic = config['domain']['periodicity']
+#         minDomain = config['domain']['minExtent']
+#         maxDomain = config['domain']['maxExtent']
+#         periodicity = torch.tensor([False] * x.shape[1], dtype = torch.bool).to(x.device)
+#         if isinstance(periodic, torch.Tensor):
+#             periodicity = periodic
+#         if isinstance(periodic, bool):
+#             periodicity = torch.tensor([periodic] * x.shape[1], dtype = torch.bool).to(x.device)
+
+#         mod_positions = torch.stack([x[:,i] if not periodic_i else torch.remainder(x[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
+#         lin_x = (mod_positions[:,0] - minDomain[0]) / (maxDomain[0] - minDomain[0])
+#         lin_y = (mod_positions[:,1] - minDomain[1]) / (maxDomain[1] - minDomain[1])
+
+#         gridDim = 128 // 2
+#         linearIndex = (torch.round(lin_x * gridDim) + torch.round(lin_y * gridDim) * gridDim).to(torch.int32)
+#         sortedIndices = torch.argsort(linearIndex)
+#         sortedPositions = mod_positions[sortedIndices]
+#         shiftState['positions'] = sortedPositions
+
+#         _, noiseNeighbors = neighborSearch(shiftState, noiseState, config)
+
+#         noise = noiseSimplex.flatten().to(particlesA.device)
+#         noiseState['potential'] = sphOperationStates(noiseState, shiftState, (noise, noise), operation = 'interpolate', neighborhood = noiseNeighbors)
+#         noiseState['positions'] = shiftState['positions']
+
+
+
+#     else:
+#         noiseState['potential'] = noiseSimplex.flatten().to(particlesA.device)
+
+
+#     _, fluidNeighborhood = neighborSearch(noiseState, noiseState, config)
+
+#     noiseState['neighborhood'] = fluidNeighborhood
+#     # printState(noiseState)
+
+
+#     mask = torch.ones_like(noiseState['areas'], dtype = torch.bool)
+#     fluid_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'fluid' ]   
+#     mask = None
+#     if len(fluid_sdfs) > 0:
+#         mask = torch.zeros_like(noiseState['areas'], dtype = torch.bool)
+
+#         for sdf_func in fluid_sdfs:
+#             _, maskA, sdfValues, _ = filterParticlesWithSDF(particlesA, sdf_func, noiseState['supports'][0], -1e-4)
+#             mask = mask | maskA
+#             noiseState['distances'] = torch.min(noiseState['distances'], sdfValues)
+#         mask = mask.to(config['compute']['device'])
+#     noiseState['velocities'][~mask, :] = 0
+
+#     boundary_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'boundary' ]   
+#     for sdf in boundary_sdfs:
+#         noiseState['potential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFrees')
+#     noiseState['velocities'], noiseState['divergence'] = sampleVelocityField(noiseState,noiseState['neighborhood'])
+#     if mask is None:
+#         mask = torch.ones_like(noiseState['potential'], dtype = torch.bool)
+#     for sdf_func in boundary_sdfs:
+#         # _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
+#         _, maskA, _, _ = filterParticlesWithSDF(particlesA, sdf, config['particle']['support'], -1e-4)
+#         mask = mask & maskA
+#     noiseState['velocities'][~mask, :] = 0
+
+#     _, noiseState['numNeighbors'] = countUniqueEntries(fluidNeighborhood['indices'][0], noiseState['positions'])
+
+#     return noiseState, mask
 
 # from diffSPH.v2.sampling import sampleParticles
 
