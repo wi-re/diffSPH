@@ -11,7 +11,7 @@ from diffSPH.v2.sphOps import sphOperation, sphOperationStates
 from diffSPH.v2.math import scatter_sum
 from diffSPH.v2.modules.densityDiffusion import renormalizedDensityGradient, computeDensityDeltaTerm
 from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrices
-from diffSPH.v2.modules.momentumEquation import computeMomentumEquation
+# from diffSPH.v2.modules.momentumEquation import computeMomentumEquation
 from diffSPH.v2.modules.viscosity import computeViscosity
 from diffSPH.v2.modules.pressureEOS import computeEOS
 from diffSPH.v2.modules.pressureForce import computePressureAccel
@@ -108,8 +108,8 @@ from diffSPH.v2.sphOps import sphOperation, sphOperationStates
 from diffSPH.v2.math import scatter_sum
 from diffSPH.v2.modules.densityDiffusion import renormalizedDensityGradient, computeDensityDeltaTerm, densityGradient
 from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrices
-from diffSPH.v2.modules.momentumEquation import computeMomentumEquation
-from diffSPH.v2.modules.viscosity import computeViscosity
+# from diffSPH.v2.modules.momentumEquation import computeMomentumEquation
+# from diffSPH.v2.modules.viscosity import computeViscosity
 from diffSPH.v2.modules.pressureEOS import computeEOS
 from diffSPH.v2.modules.pressureForce import computePressureAccel
 from diffSPH.v2.modules.gravity import computeGravity
@@ -124,6 +124,33 @@ from diffSPH.v2.modules.normalizationMatrices import computeCovarianceMatrices
 # from diffSPH.v2.modules.inletOutlet import buildOutletGhostParticles
 from diffSPH.v2.modules.mDBC import buildBoundaryGhostParticles, mDBCDensity
 from diffSPH.v2.modules.inletOutlet import buildOutletGhostParticles
+from diffSPH.v2.modules.momentumEquation import computeMomentumEquation
+
+
+
+def computePressureAccelNonConservative(stateA, stateB, neighborhood, config):
+    with record_function("[SPH] - Pressure Acceleration (1/rho nabla p)"):
+        (i,j) = neighborhood['indices']
+        p_i = stateA['pressures'][i]
+        p_j = stateB['pressures'][j]
+        p_ij = p_j - p_i
+        # p_ij = p_j + p_i
+
+        masses = (stateA['masses'], stateB['masses'])
+        densities = (stateA['densities'], stateB['densities'])
+        i, j = neighborhood['indices']
+        gradKernels = neighborhood['gradients']
+        numParticles = stateA['numParticles']
+
+        k = (masses[1][j] / (densities[0][i] * densities[1][j] )).view(-1,1) * gradKernels
+        qij = p_ij
+        kq = torch.einsum('n... , nd -> n...d', qij, k)
+
+        return -scatter_sum(kq, i, dim = 0, dim_size = numParticles)
+
+        return -sphOperationStates(stateA, stateB, p_ij, operation = 'gradient', gradientMode='summation') / stateA['densities'].view(-1,1)
+        return -sphOperationStates(stateA, stateB, (stateA['pressures'], stateB['pressures']), operation = 'gradient', gradientMode='summation', neighborhood= neighborhood) / stateA['densities'].view(-1,1)
+    
 
 def checkNaNs(state):
     for key in state:
@@ -277,6 +304,7 @@ def simulationStep(state, config):
     with record_function("[SPH] - deltaSPH (8 - Pressure Forces)"):
         if 'boundary' in state:
             state['fluid']['pressureAccel'], state['boundary']['pressureAccel'] = callModule(state, computePressureAccel, config, 'all')
+            state['fluid']['pressureAccel'], _ = callModule(state, computePressureAccelNonConservative, config, 'fluid')
             if config['compute']['checkNaN']:
                 # print(f'Pressure Min: {state["fluid"]["pressureAccel"].min()}, Max: {state["fluid"]["pressureAccel"].max()}')
                 # print(f'Density Min: {state["fluid"]["densities"].min()}, Max: {state["fluid"]["densities"].max()}')
@@ -294,6 +322,7 @@ def simulationStep(state, config):
                 checkNaN(state['boundary']['pressureAccel'], 'boundary - pressureAccel')
         else:
             state['fluid']['pressureAccel'], _ = callModule(state, computePressureAccel, config, 'fluid')
+            state['fluid']['pressureAccel'], _ = callModule(state, computePressureAccelNonConservative, config, 'fluid')
             checkNaN(state['fluid']['pressureAccel'], 'pressureAccel')
         # torch.cuda.synchronize()
     # state['fluid']['divergence'], state['boundary']['divergence'] = callModule(state, computePressureAccel, config, 'all')
@@ -313,8 +342,8 @@ def simulationStep(state, config):
         dudt = state['fluid']['pressureAccel'] + state['fluid']['gravityAccel'] + state['fluid']['velocityDiffusion']
         drhodt = state['fluid']['momentumEquation'] + state['fluid']['densityDiffusion']
 
-        print('Momentum Term: Mean - ', state['fluid']['momentumEquation'].mean(), 'Max - ', state['fluid']['momentumEquation'].max(), 'Min - ', state['fluid']['momentumEquation'].min(), 'Sum: ', state['fluid']['momentumEquation'].sum())
-        print('Density Term: Mean - ', state['fluid']['densityDiffusion'].mean(), 'Max - ', state['fluid']['densityDiffusion'].max(), 'Min - ', state['fluid']['densityDiffusion'].min(), 'Sum: ', state['fluid']['densityDiffusion'].sum())
+        # print('Momentum Term: Mean - ', state['fluid']['momentumEquation'].mean(), 'Max - ', state['fluid']['momentumEquation'].max(), 'Min - ', state['fluid']['momentumEquation'].min(), 'Sum: ', state['fluid']['momentumEquation'].sum())
+        # print('Density Term: Mean - ', state['fluid']['densityDiffusion'].mean(), 'Max - ', state['fluid']['densityDiffusion'].max(), 'Min - ', state['fluid']['densityDiffusion'].min(), 'Sum: ', state['fluid']['densityDiffusion'].sum())
         
 
         if config['compute']['checkNaN']:

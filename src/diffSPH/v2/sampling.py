@@ -915,3 +915,96 @@ def generateInitialParticles(config):
         }
 
     return perennialState
+
+from diffSPH.v2.modules.viscosity import computeViscosity 
+from diffSPH.v2.modules.gravity import computeGravity
+from diffSPH.v2.modules.dfsph import dfsphSolve
+from diffSPH.v2.simulationSchemes.dfsph import callModule, computeDensity
+from diffSPH.v2.modules.neighborhood import searchNeighbors
+
+def generateInitialConditions(particleState, config, verbose = False):
+    baseShiftingConfig = copy.deepcopy(config['shifting'])
+
+    config['shifting']['solver'] = 'BiCGStab_wJacobi'
+    # config['shifting']['solver'] = 'BiCGStab'
+    config['shifting']['maxIterations'] = 64
+    config['shifting']['freeSurface'] = False
+    config['shifting']['summationDensity'] = True
+    config['shifting']['scheme'] = 'IPSn'
+    config['shifting']['maxSolveIter'] = 128
+    config['shifting']['initialization'] = 'deltaMinus'
+    config['shifting']['threshold'] = 5
+
+    if verbose:
+        print('Generating initial conditions')
+    positions = torch.rand(particleState['positions'].shape, device = particleState['positions'].device) * 2 - 1
+
+    if verbose:
+        print('Generating Shift State')
+    shiftState = {
+        'positions': positions,
+        'areas': particleState['areas'],
+        'densities': particleState['densities'].clone(),
+        'numParticles': particleState['numParticles'],
+        'velocities': particleState['velocities'].clone(),
+        'masses': particleState['masses'].clone(),
+        'supports': particleState['supports'].clone(),
+    }
+    if verbose:
+        print('Delta-Plus Shifting steps')
+    dx, states = solveShifting({
+        'fluid':shiftState
+    }, config)
+    shiftState['positions'] = positions + dx
+    config['shifting']['scheme'] = 'IPS'
+    config['shifting']['maxIterations'] = 16
+    if verbose:
+        print('IPS Shifting steps')
+    dx, states = solveShifting({
+        'fluid':shiftState
+    }, config)
+    shiftState['positions'] = shiftState['positions'] + dx
+
+    config['shifting'] = baseShiftingConfig
+    initialState = {
+        'fluid': shiftState,
+        'time': 0.0,
+        'timestep': 0,
+        'dt': torch.tensor(5e-4, device = config['compute']['device']),
+    }
+
+    state = copy.deepcopy(initialState)
+    k = 1 * np.pi
+    state['fluid']['velocities'][:,0] =  0 * torch.cos(k * state['fluid']['positions'][:,0]) * torch.sin(k * state['fluid']['positions'][:,1])
+    state['fluid']['velocities'][:,1] = -0 * torch.sin(k * state['fluid']['positions'][:,0]) * torch.cos(k * state['fluid']['positions'][:,1])
+
+    config['dfsph']['maxIters'] = 48
+    config['dfsph']['errorThreshold'] = 1e-5/ config['fluid']['rho0']
+    config['dfsph']['omega'] = 0.3
+    config['dfsph']['sourceTerm'] = 'density'
+    if verbose:
+        print('DFSPH steps')
+    i = 0
+    while(True):
+        i += 1
+        searchNeighbors(state, config)
+
+        state['fluid']['densities'], _ = callModule(state, computeDensity, config, 'fluid')
+        # print(f'Iteration {i}, rho = {state["fluid"]["densities"].mean()}')
+        state['fluid']['velocityDiffusion'], _ = callModule(state, computeViscosity, config, 'fluid')
+        state['fluid']['gravityAccel'] = computeGravity(state['fluid'], config)
+        state['fluid']['gravityAccel'] = state['fluid']['gravityAccel'] * 0
+        state['fluid']['advection'] = state['fluid']['gravityAccel'] + state['fluid']['velocityDiffusion']
+        state['fluid']['pressureAccel'], _ = callModule(state, dfsphSolve, config, 'fluid')
+        dudt = state['fluid']['pressureAccel'] + state['fluid']['gravityAccel'] + state['fluid']['velocityDiffusion']
+
+        state['fluid']['accelerations'] = dudt
+        state['fluid']['velocities'] = state['fluid']['velocities'] + state['fluid']['accelerations'] * state['dt']
+        state['fluid']['positions'] = state['fluid']['positions'] + state['fluid']['velocities'] * state['dt']
+        state['fluid']['velocities'] = state['fluid']['velocities'] * 0.5
+        if verbose:
+            print(f'Iteration {i}, rho = {state["fluid"]["densities"].mean()} Iterations: {len(state["fluid"]["convergence_density"])}, residual: {state["fluid"]["convergence_density"][-1]}')
+        if state["fluid"]["convergence_density"][-1] < 1e-4 / config['fluid']['rho0'] or i > 256:
+            break
+
+    return state
