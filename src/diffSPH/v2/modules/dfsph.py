@@ -44,7 +44,7 @@ def updatePressure(stateA, stateB, config, neighborhood, density = True):
     sourceTerm = stateA['sourceTerm']
     residual = kernelSum - sourceTerm
     pressure = stateA['pressureA'] + config['dfsph']['omega'] * (sourceTerm - kernelSum) / stateA['alpha']
-    if density:
+    if config['dfsph']['clampPressure']:
         pressure = torch.max(pressure, torch.zeros_like(pressure))
 
     return pressure, residual
@@ -116,6 +116,7 @@ def getParameters():
         Parameter('dfsph', 'maxIters', int, 256, required = False,export = False, hint = 'Maximum number of iterations'),
         Parameter('dfsph', 'errorThreshold', float, 1e-4, required = False,export = False, hint = 'Error threshold for pressure solver'),
         Parameter('dfsph', 'omega', float, 0.5, required = False,export = False, hint = 'Relaxation factor for pressure solver'),
-        Parameter('dfsph', 'sourceTerm', str, 'density', required = False,export = False, hint = 'Source term for pressure solver')
+        Parameter('dfsph', 'sourceTerm', str, 'density', required = False,export = False, hint = 'Source term for pressure solver'),
+        Parameter('dfsph', 'clampPressure', bool, True, required = False,export = False, hint = 'Clamp pressure to positive values'),
 
     ]
