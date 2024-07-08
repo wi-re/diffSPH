@@ -328,6 +328,8 @@ from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrice
 from diffSPH.v2.modules.surfaceDetection import detectFreeSurfaceBarecasco, computeNormalsMaronne, detectFreeSurfaceMaronne, expandFreeSurfaceMask, computeColorField, computeColorFieldGradient, detectFreeSurfaceColorFieldGradient
 # from diffSPH.v2.modules.shifting import computeLambdaGrad, deltaPlusShifting, computeShifting, BiCGStab_wJacobi, BiCG, LinearCG, BiCGStab
 
+from diffSPH.v2.sparse import bicg, bicgstab, cg
+
 def computeShifting(particleState, config, computeRho = False, scheme = 'BiCG'):
     with record_function("[Shifting] - Implicit Particle Shifting (IPS)"):
         numParticles = particleState['numParticles']
@@ -414,6 +416,10 @@ def computeShifting(particleState, config, computeRho = False, scheme = 'BiCG'):
                 activeMask = torch.logical_and(particleState['boundaryMarker'][i] == 0, fs[i] < 0.5)
             else:
                 activeMask = particleState['boundaryMarker'][i] == 0
+
+        # if 'jacobi' in scheme:
+            # M = torch.zeros_like(B)
+            # M_i = torch.arange()
 
         if scheme == 'BiCG':
             xk, convergence, iters, residual = BiCG(H[activeMask], B, x0, i[activeMask], j[activeMask], maxIter = config['shifting']['maxSolveIter'])
