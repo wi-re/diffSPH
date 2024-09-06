@@ -229,7 +229,7 @@ def prepVisualizationState(perennialState, config, nGrid = 128, fluidNeighborhoo
     else:
         visualizationState['fluid']['positions'] = x  
 
-    if 'boundary' in perennialState:
+    if 'boundary' in perennialState and perennialState['boundary'] is not None:
         x = perennialState['boundary']['positions']
         if periodicity[0] and not periodicity[1]:
             visualizationState['boundary']['positions'] = torch.stack((torch.remainder(x[:,0] - minD[0], maxD[0] - minD[0]) + minD[0], x[:,1]), dim = 1)
@@ -393,7 +393,7 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
         if which == 'fluid' or not config['boundary']['active']:
             scFluid = axis.scatter(pos_x[:,0].detach().cpu().numpy(), pos_x[:,1].detach().cpu().numpy(), s = s, c = quantity.detach().cpu().numpy(), cmap = cmap, norm = norm)
             if plotBoth and config['boundary']['active']:
-                scBoundary = axis.scatter(visualizationState['boundary']['positions'][:,0].detach().cpu().numpy(), visualizationState['boundary']['positions'][:,1].detach().cpu().numpy(), s = s * 5, c = 'black', cmap = cmap, norm = norm, marker = 'x')
+                scBoundary = axis.scatter(visualizationState['boundary']['positions'][:,0].detach().cpu().numpy(), visualizationState['boundary']['positions'][:,1].detach().cpu().numpy(), s = s * 5, c = 'black', marker = 'x')
         elif which == 'boundary':
             scBoundary = axis.scatter(pos_x[:,0].detach().cpu().numpy(), pos_x[:,1].detach().cpu().numpy(), s = s * 5, c = quantity.detach().cpu().numpy(), cmap = cmap, norm = norm, marker = 'x')
             if plotBoth:

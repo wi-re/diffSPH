@@ -409,8 +409,8 @@ def getPeriodicPosition(x, config):
     minDomain = config['domain']['minExtent']
     maxDomain = config['domain']['maxExtent']
 
-    dim = config['domain']['dim']
-    kernel = config['kernel']['function']
+    # dim = config['domain']['dim']
+    # kernel = config['kernel']['function']
 
     with record_function("NeighborSearch [adjust Domain]"):
         periodicity = torch.tensor([False] * x.shape[1], dtype = torch.bool).to(x.device)
@@ -540,20 +540,20 @@ def neighborSearch(queryState, referenceState, config, computeKernels = True, pr
     h_i = queryState['supports']
     h_j = referenceState['supports']
 
-    # neighborhood_actual, hij_actual, rij, xij = computeNeighborhood(neighborhood, pos_x, pos_y, h_i, h_j, config, 'scatter')
+    neighborhood_actual, hij_actual, rij, xij = computeNeighborhood(neighborhood, pos_x, pos_y, h_i, h_j, config, 'scatter')
 
-    # numNeighbors = countUniqueEntries(neighborhood_actual[0], pos_x)[1].to(torch.int32)
-    # neighborOffsets = torch.hstack((torch.tensor([0], dtype = torch.int32, device = numNeighbors.device), torch.cumsum(numNeighbors, dim = 0).to(torch.int32)))[:-1]\
+    numNeighbors = countUniqueEntries(neighborhood_actual[0], pos_x)[1].to(torch.int32)
+    neighborOffsets = torch.hstack((torch.tensor([0], dtype = torch.int32, device = numNeighbors.device), torch.cumsum(numNeighbors, dim = 0).to(torch.int32)))[:-1]\
 
-    numNeighbors, neighborOffsets, i, j, rij, xij, hij_actual = computeNeighborhood_cpp(
-    neighborhood, 
-    pos_x.shape[0],
-    numNeighbors_full, neighborOffsets_full,
-    (pos_x, pos_y), 
-    (h_i, h_j),
-    config['domain']['minExtent'], config['domain']['maxExtent'], config['domain']['periodicity'])
+    # numNeighbors, neighborOffsets, i, j, rij, xij, hij_actual = computeNeighborhood_cpp(
+    # neighborhood, 
+    # pos_x.shape[0],
+    # numNeighbors_full, neighborOffsets_full,
+    # (pos_x, pos_y), 
+    # (h_i, h_j),
+    # config['domain']['minExtent'], config['domain']['maxExtent'], config['domain']['periodicity'])
 
-    neighborhood_actual = (i, j)
+    # neighborhood_actual = (i, j)
 # torch.cuda.synchronize()
 
     if dirty:
