@@ -105,6 +105,49 @@ def sphDivergence(
     
     return scatter_sum(kq, i, dim = 0, dim_size = numParticles)
 
+@torch.jit.script 
+def sphDivergenceConsistent(
+        masses : tuple[torch.Tensor, torch.Tensor],                                 # Tuple of particle masses for (i,j)
+        densities : tuple[torch.Tensor, torch.Tensor],                              # Tuple of particle densities for (i,j)
+        quantities : Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]],                             # Tuple of particle quantities for (i,j)
+        neighborhood : tuple[torch.Tensor, torch.Tensor], gradKernels : torch.Tensor,   # Neighborhood information (i,j) and precomupted kernels ij
+        numParticles : int, type : str = 'naive', mode : str = 'div'):    # Ancillary information
+    i = neighborhood[0]                                                    
+    j = neighborhood[1]
+
+    assert (isinstance(quantities, tuple) and quantities[0].dim() > 1) or (isinstance(quantities, torch.Tensor) and quantities.dim() > 1), 'Cannot compute divergence on non vector fields!'
+    assert (mode in ['div','dot']), 'Only supports div F and nabla dot F'
+
+    if type == 'symmetric':
+        assert isinstance(quantities, tuple), 'Symmetric divergence only supports two inputs for quantities!'
+        k = masses[1][j].view(-1,1) * gradKernels
+        Ai = torch.einsum('n..., n -> n...', quantities[0][i], 1.0 / densities[0][i]**2)
+        Aj = torch.einsum('n..., n -> n...', quantities[1][j], 1.0 / densities[1][j]**2)
+        q = Ai + Aj
+            
+        if mode == 'div':
+            kq = torch.einsum('n...d, nd -> n...', q, k)
+        else:
+            kq = torch.einsum('nd..., nd -> n...', q, k)
+
+        return torch.einsum('n, n... -> n...', densities[0], scatter_sum(kq, i, dim = 0, dim_size = numParticles))
+        
+    q = quantities[1][j] if isinstance(quantities, tuple) else quantities
+    k = (masses[1][j] / densities[0][i]).view(-1,1) * gradKernels
+    
+    if type == 'difference':
+        q = (quantities[1][j] - quantities[0][i]) if isinstance(quantities, tuple) else quantities
+    elif type == 'summation':
+        q = (quantities[1][j] + quantities[0][i]) if isinstance(quantities, tuple) else quantities
+        
+    if mode == 'div':
+        kq = torch.einsum('n...d, nd -> n...', q, k)
+    else:
+        kq = torch.einsum('nd..., nd -> n...', q, k)
+            
+    
+    return scatter_sum(kq, i, dim = 0, dim_size = numParticles)
+
 
 @torch.jit.script 
 def sphCurl(
@@ -226,6 +269,8 @@ def sphOperation(
             return sphGradient(masses, densities, quantities, neighborhood, kernelGradients, numParticles, type = gradientMode)
         if operation == 'divergence':
             return sphDivergence(masses, densities, quantities, neighborhood, kernelGradients, numParticles, type = gradientMode, mode = divergenceMode)
+        if operation == 'divergenceConsistent':
+            return sphDivergenceConsistent(masses, densities, quantities, neighborhood, kernelGradients, numParticles, type = gradientMode, mode = divergenceMode)
         if operation == 'curl':
             return sphCurl(masses, densities, quantities, neighborhood, kernelGradients, numParticles, type = gradientMode)
         if operation == 'laplacian':
