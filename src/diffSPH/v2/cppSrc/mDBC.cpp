@@ -1,6 +1,5 @@
 #include "mDBC.h"
  
- 
 std::vector<at::Tensor> mDBC(
     std::pair<torch::Tensor, torch::Tensor> masses_,
     std::pair<torch::Tensor, torch::Tensor> densities_,
