@@ -481,11 +481,11 @@ def updateDataStructure(referenceState, config, priorDatastructure, verbose = Fa
 from diffSPH.v2.compiler import compileSourceFiles
 
 
-computeNeighborhood_module = compileSourceFiles(
-    ['./cppSrc/computeNeighborhood.cpp', './cppSrc/computeNeighborhood.cu'], module_name = 'computeNeighborhood', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
+# computeNeighborhood_module = compileSourceFiles(
+    # ['./cppSrc/computeNeighborhood.cpp', './cppSrc/computeNeighborhood.cu'], module_name = 'computeNeighborhood', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
 # from torch.utils.cpp_extension import load
 
-computeNeighborhood_cpp = computeNeighborhood_module.computeNeighborhood
+# computeNeighborhood_cpp = computeNeighborhood_module.computeNeighborhood
 
 
 def neighborSearch(queryState, referenceState, config, computeKernels = True, priorState = None, neighborDatastructure = None, verbose = False):

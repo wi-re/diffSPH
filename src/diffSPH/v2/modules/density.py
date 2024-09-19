@@ -6,3 +6,5 @@ def computeDensity(stateA, stateB, neighborhood, simConfig):
     with record_function("[SPH] - Density"):
         rho = sphOperationStates(stateA, stateB, quantities = None, operation = 'density', neighborhood = neighborhood)
         return rho
+
+
