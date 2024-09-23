@@ -252,7 +252,7 @@ def computeAlpha(stateA, stateB, config, neighborhood, dt, actualAreas):
     # alpha = torch.clamp(alpha, -1, -1e-7)
 
     # alpha = alpha * dt
-    return alpha
+    return alpha / dt
 
 
 def computePressureAcceleration(stateA, stateB, config, neighborhood, pressure):
@@ -262,9 +262,9 @@ def computePressureAcceleration(stateA, stateB, config, neighborhood, pressure):
         stateB,
         (pressure[0], pressure[1]),
         operation="gradient",
-        gradientMode="summation",
+        gradientMode="difference",
         neighborhood=neighborhood,
-    ) / stateA["densities"].view(-1, 1)
+    ) / stateA["densities"].view(-1, 1) # config['fluid']['rho0'] ## stateA["densities"].view(-1, 1)
 
 
 def updatePressure(
@@ -289,7 +289,7 @@ def updatePressure(
 
     sourceTerm = sourceTerms[0]
     residual = kernelSum - sourceTerm
-    pressure = pressures[0] + 0.31 * (sourceTerm - kernelSum) / alphas[0]
+    pressure = pressures[0] + 0.5 * (sourceTerm - kernelSum) / alphas[0]
 
     # if config['dfsph']['clampPressure']:
     # pressure = torch.max(pressure, torch.zeros_like(pressure))
@@ -301,7 +301,7 @@ def solveIncompressible_relaxedJacobi(stateA, stateB, config, dt, neighborhood):
     rho = sphOperationStates(stateA, stateB, quantities=None, operation="density", neighborhood=neighborhood)
     advectionVelocities = stateA["velocities"] + stateA["advection"] * dt
 
-    advectionDivergence = sphOperationStates(stateA, stateB, (advectionVelocities, advectionVelocities), neighborhood=neighborhood, operation="divergence")
+    advectionDivergence = -sphOperationStates(stateA, stateB, (advectionVelocities, advectionVelocities), neighborhood=neighborhood, operation="divergence",gradientMode="difference")
 
     actualArea = stateA["masses"] / rho
     # direct formulation
@@ -330,6 +330,7 @@ def solveIncompressible_relaxedJacobi(stateA, stateB, config, dt, neighborhood):
     minIters = 2  # config['dfsph']['minIters']
     maxIters = 256  # config['dfsph']['maxIters']
     errorThreshold = 5e-4  # config['dfsph']['errorThreshold']
+    # errorThreshold = 1e-5
 
     alpha = computeAlpha(stateA, stateB, config, neighborhood, dt=dt, actualAreas=(actualArea, actualArea))  # / fac
 
@@ -353,8 +354,6 @@ def solveIncompressible_relaxedJacobi(stateA, stateB, config, dt, neighborhood):
 
         i += 1
     return pressureB, i, errors, pressures, sourceTerm
-
-
 
 from diffSPH.v2.modules.neighborhood import searchNeighbors
 from diffSPH.v2.simulationSchemes.dfsph import callModule, computeDensity, computeGravity, computeViscosity, sphOperationStates, scatter_sum
@@ -407,7 +406,14 @@ def simulationStep(solverState, config):
     solvedDivergence = sphOperationStates(solverState['fluid'], solverState['fluid'], (v_prime, v_prime), operation='divergenceConsistent', neighborhood=solverState['fluid']['neighborhood'])
 
     ## Solve Incompressible PPE
-    
+    # for i in range(1):
+        # searchNeighbors(solverState, config)
+        # solverState['fluid']['densities'], _ = callModule(solverState, computeDensity, config, 'fluid')
+        # if i > 0:
+        #     solverState['fluid']['advection'][:,0] = 0
+        #     solverState['fluid']['advection'][:,1] = 0
+        #     v_prime = finalVelocities
+
     p_starstar, iters_inc, errors, pressures, sourceTerm = solveIncompressible_relaxedJacobi(solverState['fluid'], solverState['fluid'], config, solverState['dt'], neighborhood=solverState['fluid']['neighborhood'])
     # print(f'Pressure Stats: {p_starstar.max()} | {p_starstar.min()} | {p_starstar.mean()}')
     solverState['fluid']['pressureIncompressible'] = p_starstar
@@ -421,8 +427,11 @@ def simulationStep(solverState, config):
     projectedVelocity = v_prime + torch.bmm(gradV, particleShift.unsqueeze(-1)).squeeze(-1)
     finalVelocities = projectedVelocity
     # finalVelocities = v_prime
+    # if i == 0:
+    
     finalPositions = solverState['fluid']['positions'] + v_prime * solverState['dt'] + particleShift
-
+    # else:
+        # finalPositions += particleShift
     solverState['fluid']['particleShift'] = particleShift
     solverState['fluid']['projectedVelocities'] = projectedVelocity
     # print(solverState['dt'])
