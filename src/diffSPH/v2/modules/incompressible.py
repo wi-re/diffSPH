@@ -135,12 +135,13 @@ def computeLaplacian(stateA, stateB, config, neighborhood, dt):
 
 def computeDivergence(stateA, stateB, neighborhood, simConfig, key="velocities"):
     with record_function("[SPH] - Fluid Divergence ($nabla cdot \\bar{v}$)"):
-        divergence = sphOperationStates(
+        divergence = -sphOperationStates(
             stateA,
             stateB,
             (stateA[key], stateB[key]),
             neighborhood=neighborhood,
             operation="divergence",
+            gradientMode = 'difference',
         )
         return divergence
 
