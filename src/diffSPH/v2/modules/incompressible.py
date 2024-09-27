@@ -168,6 +168,7 @@ def computeDivergenceSourceTerm(stateA, stateB, config, neighborhood, dt):
     B -= B.mean()
     return B#.to(torch.float64)
 
+from diffSPH.v2.sparse import make_id, bicgstab
 
 def projectVelocities(stateA, stateB, config, neighborhood, dt, returnSparseSystem=False, solveOnCPU=False, solverPrecision=torch.float32):
     numParticles = stateA['numParticles']
@@ -195,8 +196,14 @@ def projectVelocities(stateA, stateB, config, neighborhood, dt, returnSparseSyst
         x0 = x0.to(solverPrecision)
 
     residuals = []
+    
+    # p, iters, convergence = cg_sparse(A, B, x0, rtol=1e-3, maxiter=512, M=M_coo, removeMean=True)
+    p, iters, convergence = bicgstab(A, B, x0, rtol=1e-3, maxiter=512, M=M_coo)
 
-    p, iters, convergence = cg_sparse(A, B, x0, rtol=1e-2, maxiter=512, M=M_coo, removeMean=True)
+    # bicgstab
+
+
+
     if solveOnCPU or solverPrecision != torch.float32:
         p = p.to(dtype).to(device)
 
