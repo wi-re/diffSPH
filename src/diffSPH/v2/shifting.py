@@ -186,6 +186,7 @@ def BiCGStab(H, B, x0, i, j, tol : float =1e-5):
         pk = rk + beta * (pk - omega * apk)
         
         num_iter += 1
+        
 
     return xk
 
