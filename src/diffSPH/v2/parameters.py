@@ -194,7 +194,6 @@ def parseDefaultParameters(config):
     config['kernel']['kernelScale'] = config['particle']['support'] / (2 * config['particle']['dx'])
     config['particle']['smoothingLength'] = 2 * config['particle']['dx']
     config['noise']['n'] = config['particle']['nx']
-
     # for plot in config['plot']['plots']:
         # for parameter in plotStateDict:
             # parameter.parseConfig(config['plot']['plots'][plot])
@@ -212,4 +211,5 @@ def parseModuleParameters(config):
         for param in params:
             param.parseConfig(config)
     config['diffusion']['nu_sph'] = computeViscosityParameter(None, config)
+    config['shifting']['solverThreshold'] = config['particle']['dx'] / 2 if config['shifting']['solverThreshold'] < 0 else config['shifting']['solverThreshold']
     return config
