@@ -268,17 +268,29 @@ class KernelWrapper:
         x_ij = xij * r_ij.unsqueeze(-1)
         q_ij = rij
 
-        termA_x = x_ij[:,0]**2 / (hij * r_ij    + 1e-5 * hij)**2 * self.module.d2kdq2(q_ij, dim = dim)
-        termA_y = x_ij[:,1]**2 / (hij * r_ij    + 1e-5 * hij)**2 * self.module.d2kdq2(q_ij, dim = dim)
 
-        termB_x = torch.where(r_ij / hij > 1e-5, 1 /(hij * r_ij + 1e-6 * hij),0) * self.module.dkdq(q_ij, dim = dim)
-        termB_y = torch.where(r_ij / hij > 1e-5, 1 /(hij * r_ij + 1e-6 * hij),0) * self.module.dkdq(q_ij, dim = dim)
+        k2 = self.module.d2kdq2(q_ij, dim = dim)
+        k1 = self.module.dkdq(q_ij, dim = dim)
 
-        termC_x = - (x_ij[:,0]**2) / (hij * r_ij**3 + 1e-5 * hij) * self.module.dkdq(q_ij, dim = dim)
-        termC_y = - (x_ij[:,1]**2) / (hij * r_ij**3 + 1e-5 * hij) * self.module.dkdq(q_ij, dim = dim)
+        termA_x = x_ij[:,0]**2 / (hij**2 * r_ij**2    + 1e-5 * hij) * k2
+        termA_y = x_ij[:,1]**2 / (hij**2 * r_ij**2    + 1e-5 * hij) * k2
+
+        termB_x = x_ij[:,1]**2 / (hij * r_ij**3 + 1e-10 * hij) * k1
+        termB_y = x_ij[:,0]**2 / (hij * r_ij**3 + 1e-10 * hij) * k1
+            
+        d2Wdx2 = factor * (termA_x + termB_x + 1/hij**2 * torch.where(q_ij < 1e-5, self.module.d2kdq2(torch.tensor(0.), dim = dim), 0))
+        d2Wdy2 = factor * (termA_y + termB_y + 1/hij**2 * torch.where(q_ij < 1e-5, self.module.d2kdq2(torch.tensor(0.), dim = dim), 0))
+        # termA_x = x_ij[:,0]**2 / (hij * r_ij    + 1e-5 * hij)**2 * self.module.d2kdq2(q_ij, dim = dim)
+        # termA_y = x_ij[:,1]**2 / (hij * r_ij    + 1e-5 * hij)**2 * self.module.d2kdq2(q_ij, dim = dim)
+
+        # termB_x = torch.where(r_ij / hij > 1e-5, 1 /(hij * r_ij + 1e-6 * hij),0) * self.module.dkdq(q_ij, dim = dim)
+        # termB_y = torch.where(r_ij / hij > 1e-5, 1 /(hij * r_ij + 1e-6 * hij),0) * self.module.dkdq(q_ij, dim = dim)
+
+        # termC_x = - (x_ij[:,0]**2) / (hij * r_ij**3 + 1e-5 * hij) * self.module.dkdq(q_ij, dim = dim)
+        # termC_y = - (x_ij[:,1]**2) / (hij * r_ij**3 + 1e-5 * hij) * self.module.dkdq(q_ij, dim = dim)
                 
-        d2Wdx2 = factor * (termA_x + termB_x + termC_x + 1/hij**2 * torch.where(q_ij < 1e-5, self.module.d2kdq2(torch.tensor(0.), dim = dim), 0))
-        d2Wdy2 = factor * (termA_y + termB_y + termC_y + 1/hij**2 * torch.where(q_ij < 1e-5, self.module.d2kdq2(torch.tensor(0.), dim = dim), 0))
+        # d2Wdx2 = factor * (termA_x + termB_x + termC_x + 1/hij**2 * torch.where(q_ij < 1e-5, self.module.d2kdq2(torch.tensor(0.), dim = dim), 0))
+        # d2Wdy2 = factor * (termA_y + termB_y + termC_y + 1/hij**2 * torch.where(q_ij < 1e-5, self.module.d2kdq2(torch.tensor(0.), dim = dim), 0))
 
         d2Wdxy = self.module.C_d(dim) * hij**(-dim) * torch.where(q_ij > -1e-7, \
             ( x_ij[:,0] * x_ij[:,1]) / (hij * r_ij **2 + 1e-5 * hij) * (1 / hij * self.module.d2kdq2(q_ij, dim = dim) - 1 / (r_ij + 1e-3 * hij) * self.module.dkdq(q_ij, dim = dim)),0)
