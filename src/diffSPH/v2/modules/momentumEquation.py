@@ -16,7 +16,7 @@ def computeMomentumEquation(stateA, stateB, neighborhood, config):
 
         rho_j = stateB['densities'][j]
 
-        q_ij = (u_j - u_i) * stateA['masses'][j].view(-1,1)
+        q_ij = (u_j - u_i) * stateB['masses'][j].view(-1,1)
         # q_ij = (u_j - u_i) * stateA['masses'][j].to(torch.float64).view(-1,1)
 
         k = neighborhood['gradients']#.to(torch.float64)

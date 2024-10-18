@@ -167,7 +167,7 @@ def checkNaNs(state):
                 print(f'NaNs in {key} - {subkey}')
                 raise RuntimeError(f'NaNs in {key} - {subkey}')
 def checkNaN(tensor, name):
-    if torch.any(torch.isnan(tensor)):
+    if torch.any(torch.isnan(tensor)) or torch.any(torch.isinf(tensor)) or torch.any(torch.abs(tensor) > 1e10):
         print(f'NaNs in {name}, number of NaNs: {torch.sum(torch.isnan(tensor))}')
         raise RuntimeError(f'NaNs in {name}, number of NaNs: {torch.sum(torch.isnan(tensor))}')
 
@@ -304,7 +304,7 @@ def simulationStep(state, config):
     with record_function("[SPH] - deltaSPH (8 - Pressure Forces)"):
         if 'boundary' in state:
             state['fluid']['pressureAccel'], state['boundary']['pressureAccel'] = callModule(state, computePressureAccel, config, 'all')
-            state['fluid']['pressureAccel'], _ = callModule(state, computePressureAccelNonConservative, config, 'fluid')
+            # state['fluid']['pressureAccel'], _ = callModule(state, computePressureAccelNonConservative, config, 'fluid')
             if config['compute']['checkNaN']:
                 # print(f'Pressure Min: {state["fluid"]["pressureAccel"].min()}, Max: {state["fluid"]["pressureAccel"].max()}')
                 # print(f'Density Min: {state["fluid"]["densities"].min()}, Max: {state["fluid"]["densities"].max()}')

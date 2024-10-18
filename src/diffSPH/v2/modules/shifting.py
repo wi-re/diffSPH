@@ -481,7 +481,9 @@ def bicgstab_shifting(A,  b, x0:Optional[torch.Tensor]=None, tol:float = 1e-5, r
         dist = torch.linalg.norm(dx, dim = -1)
         if torch.any(dist > threshold):
             if verbose:
-                print(f'xk: {xk}, dist: {dist.max()}')
+                print(f'\t[{iteration:3d}]\txk breakdown: {xk}, dist: {dist.max()} | {threshold}')
+
+            return xk, -12, convergence#, r0
             break
 
     # else:  # for loop exhausted
@@ -660,12 +662,15 @@ def getShiftingMatrices(particleState, config, computeRho):
             B[::2] = J2[:,0]
             B[1::2] = J2[:,1]
 
+            # B[::2] = J[:,0]
+            # B[1::2] = J[:,1]
+
             x0 = x0.view(-1,2)
             x0[fs > 0.5,0] = 0
             x0[fs > 0.5,1] = 0
             x0 = x0.flatten()
-            H[fs[i] > 0.5,:,:] = 0
-            # H[fs[j] > 0.5,:,:] = 0
+            # H[fs[i] > 0.5,:,:] = 0
+            H[fs[j] > 0.5,:,:] = 0
             activeMask = fs[i] < 0.5
             # iActual = i[fs[i] < 0.5]
             # jActual = j[fs[i] < 0.5]
@@ -686,8 +691,10 @@ def getShiftingMatrices(particleState, config, computeRho):
         if torch.any(particleState['boundaryMarker'] > 0):
             # J[particleState['boundaryMarker'] > 0, :] = 0
             B.view(-1,2)[particleState['boundaryMarker'] > 0, 0] = 0
+            B.view(-1,2)[particleState['boundaryMarker'] > 0, 1] = 0
             H[particleState['boundaryMarker'][i] > 0, :, :] = 0
             x0.view(-1,2)[particleState['boundaryMarker'] > 0, 0] = 0
+            x0.view(-1,2)[particleState['boundaryMarker'] > 0, 1] = 0
             if config['shifting']['freeSurface']:
                 activeMask = torch.logical_and(particleState['boundaryMarker'][i] == 0, fs[i] < 0.5)
             else:
@@ -791,7 +798,7 @@ def computeShifting(particleState, config, computeRho = False, scheme = 'BiCG'):
         
         K, J, H = evalKernel(rij, xij, hij, k, dim)
         
-        H, B, x0, i, j, activeMask = getShiftingMatrices(particleState, config, computeRho = True)
+        H, B, x0, i, j, activeMask = getShiftingMatrices(particleState, config, computeRho = config['shifting']['summationDensity'])
         
         # h2 = particleState['supports'].repeat(2,1).T.flatten()
         # h2 = config['particle']['dx']

@@ -630,8 +630,8 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
         # print('Updating plot')
         # print(plotState['plot'])
         # print(which)
-        scFluid = plotState['plot']
-        scBoundary = plotState['boundaryPlot']
+        scFluid = plotState['plot'] if 'plot' in plotState else None
+        scBoundary = plotState['boundaryPlot'] if 'boundaryPlot' in plotState else None
         if scFluid is not None:
             if which == 'fluid' or scBoundary is None:
                 scFluid.set_offsets(pos_x.detach().cpu().numpy())
