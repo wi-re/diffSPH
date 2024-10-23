@@ -212,4 +212,10 @@ def parseModuleParameters(config):
             param.parseConfig(config)
     config['diffusion']['nu_sph'] = computeViscosityParameter(None, config)
     config['shifting']['solverThreshold'] = config['particle']['dx'] / 2 if config['shifting']['solverThreshold'] < 0 else config['shifting']['solverThreshold']
+    
+    if 'boundaryDiffusion' in config:
+        for param in config['diffusion'].keys():
+            if (not param in config['boundaryDiffusion']) or config['boundaryDiffusion'][param] is None:
+                config['boundaryDiffusion'][param] = config['diffusion'][param]
+
     return config

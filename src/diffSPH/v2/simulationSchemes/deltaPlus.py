@@ -15,6 +15,7 @@ from diffSPH.v2.modules.normalizationMatrices import computeNormalizationMatrice
 from diffSPH.v2.modules.viscosity import computeViscosity
 from diffSPH.v2.modules.pressureEOS import computeEOS
 from diffSPH.v2.modules.pressureForce import computePressureAccel
+from diffSPH.v2.modules.boundaryViscosity import computeViscosity_Boundary
 from diffSPH.v2.modules.gravity import computeGravity
 from diffSPH.v2.modules.sps import computeSPSTurbulence
 from torch.profiler import record_function
@@ -275,6 +276,11 @@ def simulationStep(state, config):
         if config['boundary']['active']:
             # state['fluid']['velocityDiffusion'], _ = callModule(state, computeViscosity, config, 'fluid')
             state['fluid']['velocityDiffusion'], state['boundary']['velocityDiffusion'] = callModule(state, computeViscosity, config, 'fluid')
+
+            state['fluid']['boundaryVelocityDiffusion'], _ = callModule(state, computeViscosity_Boundary, config, 'boundaryToFluid')
+
+            state['fluid']['velocityDiffusion'] += state['fluid']['boundaryVelocityDiffusion']
+
             if config['compute']['checkNaN']:
                 checkNaN(state['fluid']['velocityDiffusion'], 'velocityDiffusion')
                 # checkNaN(state['boundary']['velocityDiffusion'], 'boundary - velocityDiffusion')
