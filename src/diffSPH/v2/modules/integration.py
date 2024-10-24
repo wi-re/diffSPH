@@ -367,8 +367,10 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                     dxdt, dudt, drhodt = None, None, None
 
                     dudt = fluidUpdate_halfStep[1]
+                    dxdt_half = fluidUpdate_halfStep[0]
+                    dxdt_initial = fluidUpdate_initial[0]
 
-                    newVelocities = perennialState['fluid']['velocities'] + dudt * dt
+                    newVelocities = dxdt_half + dudt * dt
 
                     dxdt = 0.5 * (perennialState['fluid']['velocities'] + newVelocities) * dt
 
