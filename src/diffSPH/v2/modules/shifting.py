@@ -907,6 +907,9 @@ def solveShifting(simulationState, config):
             particleState['neighborhood'] = simulationState['fluid']['neighborhood']
 
 
+        initialBoundaryPositions = torch.clone(boundaryParticleState['positions']) if boundaryParticleState is not None else None
+        initialBoundaryDensities = torch.clone(boundaryParticleState['densities']) if boundaryParticleState is not None else None
+
         initialPositions = torch.clone(particleState['positions'])
         initialDensities = torch.clone(particleState['densities'])
         overallStates = []
@@ -1002,6 +1005,11 @@ def solveShifting(simulationState, config):
 
         simulationState['fluid']['positions'] = particleState['positions'][:numParticles]
         simulationState['fluid']['densities'] = particleState['densities'][:numParticles]
+
+        if boundaryParticleState is not None:
+            simulationState['boundary']['positions'] = initialBoundaryPositions
+            simulationState['boundary']['densities'] = initialBoundaryDensities
+
         dx = dx[:numParticles]
 
         if 'neighborhood' in simulationState['fluid']:

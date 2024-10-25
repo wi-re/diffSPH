@@ -30,14 +30,14 @@ def updateStates(dt, update, stateA, stateB):
             stateA['velocities'] += dudt * dt
         if drhodt is not None:
             stateA['densities'] += drhodt * dt
-    if updateB is not None:
-        dxdt, dudt, drhodt = updateB
-        if dxdt is not None:
-            stateB['positions'] += dxdt * dt
-        if dudt is not None:
-            stateB['velocities'] += dudt * dt
-        if drhodt is not None:
-            stateB['densities'] += drhodt * dt
+    # if updateB is not None:
+    #     dxdt, dudt, drhodt = updateB
+    #     if dxdt is not None:
+    #         stateB['positions'] += dxdt * dt
+    #     if dudt is not None:
+    #         stateB['velocities'] += dudt * dt
+    #     if drhodt is not None:
+    #         stateB['densities'] += drhodt * dt
 
 def createTempState(perennialState, tempState_prior = None):
     # neighborhood
@@ -157,9 +157,9 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
             with record_function("[Simulation] - Verlet"):
                 if previousStep is not None:
                     perennialState['fluid']['positions'] += perennialState['fluid']['velocities'] * dt + 0.5 * previousStep[0][1] * dt ** 2
-                if config['boundary']['active']:
-                    if previousStep is not None:
-                        perennialState['boundary']['positions'] += perennialState['boundary']['velocities'] * dt + 0.5 * previousStep[1][1] * dt ** 2
+                # if config['boundary']['active']:
+                #     if previousStep is not None:
+                #         perennialState['boundary']['positions'] += perennialState['boundary']['velocities'] * dt + 0.5 * previousStep[1][1] * dt ** 2
 
                 fluidUpdate, boundaryUpdate = simulationStep(tempState, config)
                 if fluidUpdate is not None:
@@ -170,14 +170,14 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                         perennialState['fluid']['densities'] += 0.5 * (drhodt + previousStep[0][2]) * dt
                     if dxdt is not None:
                         perennialState['fluid']['positions'] += 0.5 * (dxdt + previousStep[0][0]) * dt
-                if config['boundary']['active']:
-                    dxdt, dudt, drhodt = boundaryUpdate
-                    if dudt is not None:
-                        perennialState['boundary']['velocities'] += 0.5 * (dudt + previousStep[1][1]) * dt
-                    if drhodt is not None:
-                        perennialState['boundary']['densities'] += 0.5 * (drhodt + previousStep[1][2]) * dt
-                    if dxdt is not None:
-                        perennialState['boundary']['positions'] += 0.5 * (dxdt + previousStep[1][0]) * dt
+                # if config['boundary']['active']:
+                #     dxdt, dudt, drhodt = boundaryUpdate
+                #     if dudt is not None:
+                #         perennialState['boundary']['velocities'] += 0.5 * (dudt + previousStep[1][1]) * dt
+                #     if drhodt is not None:
+                #         perennialState['boundary']['densities'] += 0.5 * (drhodt + previousStep[1][2]) * dt
+                #     if dxdt is not None:
+                #         perennialState['boundary']['positions'] += 0.5 * (dxdt + previousStep[1][0]) * dt
 
         elif scheme == 'leapfrog':
             if previousStep is None:
@@ -203,8 +203,8 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
 
                 # Compute the new position at t + dt
                 perennialState['fluid']['positions'] += perennialState['fluid']['velocities'] * dt
-                if config['boundary']['active']:
-                    perennialState['boundary']['positions'] += perennialState['boundary']['velocities'] * dt
+                # if config['boundary']['active']:
+                    # perennialState['boundary']['positions'] += perennialState['boundary']['velocities'] * dt
 
                 # Compute the new acceleration at t + dt
                 tempState = copy.deepcopy(perennialState)
@@ -219,15 +219,15 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                         perennialState['fluid']['positions'] += 0.5 * dxdt * dt
                     if drhodt is not None:
                         perennialState['fluid']['densities'] += 0.5 * drhodt * dt
-                if config['boundary']['active']:
-                    if boundaryUpdate is not None:
-                        dxdt, dudt, drhodt = boundaryUpdate
-                        if dudt is not None:
-                            perennialState['boundary']['velocities'] += 0.5 * dudt * dt
-                        if dxdt is not None:
-                            perennialState['boundary']['positions'] += 0.5 * dxdt * dt
-                        if drhodt is not None:
-                            perennialState['boundary']['densities'] += 0.5 * drhodt * dt
+                # if config['boundary']['active']:
+                #     if boundaryUpdate is not None:
+                #         dxdt, dudt, drhodt = boundaryUpdate
+                #         if dudt is not None:
+                #             perennialState['boundary']['velocities'] += 0.5 * dudt * dt
+                #         if dxdt is not None:
+                #             perennialState['boundary']['positions'] += 0.5 * dxdt * dt
+                #         if drhodt is not None:
+                #             perennialState['boundary']['densities'] += 0.5 * drhodt * dt
         elif scheme == 'RK4':
             with record_function("[Simulation] - RK4"):
                 with record_function("[Simulation] - RK4 - k1"):
@@ -336,20 +336,20 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
 
                     
                     fluidUpdate = (dxdt, dudt, drhodt)
-                    if config['boundary']['active']:
-                        dxdt, dudt, drhodt = None, None, None
-                        if boundaryUpdate_k1[0] is not None:
-                            dxdt = (boundaryUpdate_k1[0] + 2 * boundaryUpdate_k2[0] + 2 * boundaryUpdate_k3[0] + boundaryUpdate_k4[0]) / 6
-                            perennialState['boundary']['positions'] += dxdt * dt
-                        if boundaryUpdate_k1[1] is not None:
-                            dudt = (boundaryUpdate_k1[1] + 2 * boundaryUpdate_k2[1] + 2 * boundaryUpdate_k3[1] + boundaryUpdate_k4[1]) / 6
-                            perennialState['boundary']['velocities'] += dudt * dt
-                        if boundaryUpdate_k1[2] is not None:
-                            drhodt = (boundaryUpdate_k1[2] + 2 * boundaryUpdate_k2[2] + 2 * boundaryUpdate_k3[2] + boundaryUpdate_k4[2]) / 6
-                            perennialState['boundary']['densities'] += drhodt * dt
+                    # if config['boundary']['active']:
+                    #     dxdt, dudt, drhodt = None, None, None
+                    #     if boundaryUpdate_k1[0] is not None:
+                    #         dxdt = (boundaryUpdate_k1[0] + 2 * boundaryUpdate_k2[0] + 2 * boundaryUpdate_k3[0] + boundaryUpdate_k4[0]) / 6
+                    #         perennialState['boundary']['positions'] += dxdt * dt
+                    #     if boundaryUpdate_k1[1] is not None:
+                    #         dudt = (boundaryUpdate_k1[1] + 2 * boundaryUpdate_k2[1] + 2 * boundaryUpdate_k3[1] + boundaryUpdate_k4[1]) / 6
+                    #         perennialState['boundary']['velocities'] += dudt * dt
+                    #     if boundaryUpdate_k1[2] is not None:
+                    #         drhodt = (boundaryUpdate_k1[2] + 2 * boundaryUpdate_k2[2] + 2 * boundaryUpdate_k3[2] + boundaryUpdate_k4[2]) / 6
+                    #         perennialState['boundary']['densities'] += drhodt * dt
 
 
-                        boundaryUpdate = (dxdt, dudt, drhodt)
+                        # boundaryUpdate = (dxdt, dudt, drhodt)
                         # perennialState['fluid']['densities'] = tempState['fluid']['densities']
                     # return tempState, dxdt, dudt, drhodt
                     # perennialState['fluid']['velocities'] += (k1 + 2*k2 + 2*k3 + k4) * dt / 6
@@ -390,6 +390,32 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                     
                     fluidUpdate = (dxdt, dudt, epsilon_rho)
                     # if config['boundary']['active']:
+                    #     dxdt, dudt, drhodt = None, None, None
+
+                    #     # dudt = boundaryUpdate_halfStep[1]
+                    #     # dxdt_half = boundaryUpdate_halfStep[0]
+                    #     # dxdt_initial = boundaryUpdate_initial[0]
+
+                    #     # newVelocities = dxdt_half + dudt * dt
+
+                    #     # dxdt = 0.5 * (perennialState['boundary']['velocities'] + newVelocities) * dt
+
+                    #     # newPositions = perennialState['boundary']['positions'] + dxdt
+
+                    #     epsilon_rho = - dt * boundaryUpdate_halfStep[2] / tempState['boundary']['densities']
+
+                    #     newDensity = perennialState['boundary']['densities'] * (2 - epsilon_rho)/(2+epsilon_rho)
+
+                    #     # if boundaryUpdate_halfStep[0] is not None:
+                    #         # perennialState['boundary']['positions'] = newPositions
+                    #     # if boundaryUpdate_halfStep[1] is not None:
+                    #         # perennialState['boundary']['velocities'] = newVelocities
+                    #     if boundaryUpdate_halfStep[2] is not None:
+                    #         perennialState['boundary']['densities'] = newDensity
+
+                        
+
+
                     #     dxdt, dudt, drhodt = None, None, None
                     #     if boundaryUpdate_k1[0] is not None:
                     #         dxdt = (boundaryUpdate_k1[0] + 2 * boundaryUpdate_k2[0] + 2 * boundaryUpdate_k3[0] + boundaryUpdate_k4[0]) / 6

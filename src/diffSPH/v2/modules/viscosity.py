@@ -150,6 +150,7 @@ def computeViscosityDeltaSPH_inviscid(stateA, stateB, neighborhood, config):
             pi_ij = torch.where(vr_ij < 0, pi_ij, 0)
 
         V_j = stateB['masses'][j] /( stateA['densities'][i] +  stateB['densities'][j])
+        V_j = stateB['masses'][j] /(stateB['densities'][j])
         # if 'normals' in stateB:
         #     boundaryNormals = stateB['normals'][j]
         #     v_ij_parallel = torch.einsum('ij,ij->i', v_ij, boundaryNormals).view(-1,1) * boundaryNormals
