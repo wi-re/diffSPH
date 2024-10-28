@@ -253,3 +253,57 @@ def getParameters():
         Parameter('boundaryDiffusion', 'eps', float, None, required = False,export = False, hint = 'Epsilon value for the viscosity term'),
 
     ]
+
+
+
+from diffSPH.v2.sphOps import sphOperationStates, LiuLiuConsistent
+from diffSPH.v2.util import countUniqueEntries
+
+def computeBoundaryVelocities(perennialState, config):
+    ghostState = perennialState['boundaryGhost']
+    ghostNormal = -2 * perennialState['boundary']['distances'].view(-1,1) * perennialState['boundary']['normals']
+
+    ids = perennialState['boundary']['bodyIDs']
+    regions = [region for region in config['regions'] if region['type'] == 'boundary']
+
+    uniqueIDs,_ = countUniqueEntries(perennialState['boundary']['bodyIDs'].to(torch.int32), perennialState['boundary']['positions'])
+
+    velocities = torch.zeros_like(perennialState['boundary']['velocities'])
+
+    for ui, u in enumerate(uniqueIDs):
+        mode = regions[ui]['kind']
+        # print(ui, mode, u)
+        # print(ids == u)
+
+        if mode == 'linear':
+            solution_ux, M_ux, b_ux = LiuLiuConsistent(ghostState, perennialState['fluid'], perennialState['fluid']['velocities'][:,0])
+            projected_ux = solution_ux[:,0] + torch.einsum('nd, nd -> n', ghostNormal, solution_ux[:,1:])
+            solution_uy, M_uy, b_uy = LiuLiuConsistent(ghostState, perennialState['fluid'], perennialState['fluid']['velocities'][:,1])
+            projected_uy = solution_uy[:,0] + torch.einsum('nd, nd -> n', ghostNormal, solution_uy[:,1:])
+
+            velocities[ids == u,:] = torch.stack((projected_ux, projected_uy), dim = -1)[ids == u,:]
+        elif mode == 'zero':
+            velocities[ids == u,:] = torch.zeros_like(perennialState['boundary']['velocities'])[ids == u,:]
+        elif mode == 'none':
+            velocities[ids == u,:] = perennialState['boundary']['velocities'].clone()[ids == u,:]
+        elif mode == 'free-slip':
+            solution_ux, M_ux, b_ux = LiuLiuConsistent(ghostState, perennialState['fluid'], perennialState['fluid']['velocities'][:,0])
+            projected_ux = solution_ux[:,0] #+ torch.einsum('nd, nd -> n', ghostNormal, solution_ux[:,1:])
+            solution_uy, M_uy, b_uy = LiuLiuConsistent(ghostState, perennialState['fluid'], perennialState['fluid']['velocities'][:,1])
+            projected_uy = solution_uy[:,0] #+ torch.einsum('nd, nd -> n', ghostNormal, solution_uy[:,1:])
+            cvelocities = torch.stack((projected_ux, projected_uy), dim = -1)
+
+            velocities[ids == u,:] = (cvelocities - torch.einsum('nd, nd -> n', cvelocities, perennialState['boundary']['normals']).view(-1,1) * perennialState['boundary']['normals'])[ids == u,:]
+        elif mode == 'no-slip':
+            solution_ux, M_ux, b_ux = LiuLiuConsistent(ghostState, perennialState['fluid'], perennialState['fluid']['velocities'][:,0])
+            projected_ux = solution_ux[:,0] #+ torch.einsum('nd, nd -> n', ghostNormal, solution_ux[:,1:])
+            solution_uy, M_uy, b_uy = LiuLiuConsistent(ghostState, perennialState['fluid'], perennialState['fluid']['velocities'][:,1])
+            projected_uy = solution_uy[:,0] #+ torch.einsum('nd, nd -> n', ghostNormal, solution_uy[:,1:])
+            velocities = torch.stack((projected_ux, projected_uy), dim = -1)
+
+            velocities[ids == u,:] = (cvelocities - torch.einsum('nd, nd -> n', cvelocities, perennialState['boundary']['normals']).view(-1,1) * perennialState['boundary']['normals'])[ids == u,:]
+            # velocities = - velocities
+        else:
+            raise ValueError(f'Unknown boundary condition {mode}')
+
+    return velocities

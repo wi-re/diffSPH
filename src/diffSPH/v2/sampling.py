@@ -294,10 +294,10 @@ from diffSPH.v2.sphOps import sphOperation, sphOperationStates
 from diffSPH.v2.modules.neighborhood import neighborSearch
 
 def sampleVelocityField(noiseState, neighborhood):
-    gradTerm = sphOperationStates(noiseState, noiseState, (noiseState['potential'], noiseState['potential']), 'gradient', 'difference', neighborhood=neighborhood)
-    velocities = torch.stack([gradTerm[:,1], -gradTerm[:,0]], dim = -1)
-    divergence = sphOperationStates(noiseState, noiseState, (noiseState['velocities'], noiseState['velocities']), 'divergence', neighborhood=neighborhood)
-    return velocities, divergence
+    gradTerm = sphOperationStates(noiseState, noiseState, (noiseState['potential'], noiseState['potential']), operation = 'gradient', gradientMode='naive', neighborhood=neighborhood)
+    velocities = torch.stack([-gradTerm[:,1], gradTerm[:,0]], dim = -1)
+    divergence = sphOperationStates(noiseState, noiseState, (velocities, velocities), operation = 'divergence', neighborhood=neighborhood)
+    return velocities, divergence 
 
 def rampDivergenceFree(positions, noise, sdf_func, offset, d0 = 0.25):
     sdf = sdf_func(positions.cpu()).to(positions.device)
@@ -493,11 +493,20 @@ def rampOrthogonal(positions, noise, sdf_func, offset, d0 = 0.25):
     
     return (ramped) * (noise)
 
+def generateRamp(perennialState, regions, config):
+    boundary_sdfs = [region['sdf'] for region in regions if region['type'] == 'boundary']
+    combined_sdf = boundary_sdfs[0]
+    for sdf in boundary_sdfs[1:]:
+        combined_sdf = operatorDict['union'](combined_sdf, sdf)
+
+    ramp = rampDivergenceFree(perennialState['fluid']['positions'], torch.ones_like(perennialState['fluid']['densities']), combined_sdf, offset = config['particle']['dx']/2, d0 = 10 * perennialState['fluid']['supports'])
+    return ramp
+
 def filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree'):
     if kind == 'divergenceFree':
         return rampDivergenceFree(noiseState['positions'], noiseState['potential'], sdf, offset = noiseState['supports'], d0 = noiseState['supports'])
     else:
-        return rampOrthogonal(noiseState['positions'], noiseState['potential'], sdf, offset = config['particle']['dx'] / 2, d0 = noiseState['supports'])
+        return rampOrthogonal(noiseState['positions'], noiseState['potential'], sdf, offset = -config['particle']['dx'] / 2, d0 = noiseState['supports'])
     
 import copy
 from diffSPH.v2.modules.shifting import solveShifting
@@ -614,12 +623,24 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
         samplings = [samplings for _ in sdfs]
 
     boundary_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'boundary' ]   
+    
     if len(boundary_sdfs) > 0:
-        boundaryParticles, boundaryVolumes, boundaryDistances, boundaryNormals, boundaryBodyIDs, fluidMask = sampleBoundaryParticles(noiseState, boundary_sdfs, config, samplings)
+        print('Sampling boundary particles')
+        print(noiseState['numParticles'])
+        boundaryParticles, boundaryVolumes, boundaryBodyIDs, fluidMask = sampleBoundaryParticles(noiseState, boundary_sdfs, config, samplings)
+        print(fluidMask.shape)
         for k in noiseState.keys():
             if isinstance(noiseState[k], torch.Tensor):
                 noiseState[k] = noiseState[k][fluidMask]
-    noiseState['numParticles'] = noiseState['positions'].shape[0]
+        noiseState['numParticles'] = noiseState['positions'].shape[0]
+
+
+
+        combined_sdf = boundary_sdfs[0]
+        for sdf in boundary_sdfs[1:]:
+            combined_sdf = operatorDict['union'](combined_sdf, sdf)
+        # _, _, boundaryDistances, boundaryNormals = filterParticlesWithSDF(boundaryPositions, operatorDict['invert'](combined_sdf), config['particle']['support'], 1e-4)
+        _, _, noiseState['normals'], noiseState['distances'] = filterParticlesWithSDF(noiseState['positions'], combined_sdf, config['particle']['support'], 1e-4)
             
     _, fluidNeighborhood = neighborSearch(noiseState, noiseState, config)
 
@@ -795,6 +816,12 @@ def sampleSDF_regular(sdf, config):
 # from diffSPH.v2.sampling import sampleSDF_contour
 def sampleBoundaryParticles(particleState, sdfs, config, modes = ['regular']):
     
+    # combined_sdf = sdfs[0]
+    # for sdf in sdfs[1:]:
+    #     combined_sdf = operatorDict['union'](combined_sdf, sdf)
+    # _, _, boundaryDistances, boundaryNormals = filterParticlesWithSDF(boundaryPositions, operatorDict['invert'](combined_sdf), config['particle']['support'], 1e-4)
+    # _, _, normals, distances = filterParticlesWithSDF(particleState['positions'], operatorDict['invert'](combined_sdf), config['particle']['support'], 1e-4)
+
     # h = volumeToSupport(config['particle']['support'], config['kernel']['targetNeighbors'], config['domain']['dim'])
     # print(particleState)
     # print(particleState['fluidPositions'].shape)
@@ -805,15 +832,17 @@ def sampleBoundaryParticles(particleState, sdfs, config, modes = ['regular']):
     boundaryDistances = []
     boundaryNormals = []
     boundaryBodyIDs = []
-    distances = particleState['distances'] if 'distances' in particleState else torch.ones(particleState['positions'].shape[0], dtype = torch.float32, device = config['compute']['device']) * 1e8
-    normals = particleState['normals'] if 'normals' in particleState else torch.zeros(particleState['positions'].shape[0], config['domain']['dim'], dtype = torch.float32, device = config['compute']['device'])
+    # distances = particleState['distances'] if 'distances' in particleState else torch.ones(particleState['positions'].shape[0], dtype = torch.float32, device = config['compute']['device']) * 1e8
+    # normals = particleState['normals'] if 'normals' in particleState else torch.zeros(particleState['positions'].shape[0], config['domain']['dim'], dtype = torch.float32, device = config['compute']['device'])
 
     for i, (sdf, mode) in enumerate(zip(sdfs, modes)):
         maskedA, maskA, sdfValues, sdfGradients = filterParticlesWithSDF(particleState['positions'], operatorDict['invert'](sdf), config['particle']['support'], 1e-4)
+        sdfValues = sdfValues
+        sdfGradients = sdfGradients
         fluidMask = fluidMask & maskA
 
-        normals[sdfValues < distances,:] = sdfGradients[sdfValues < distances,:]
-        distances[sdfValues < distances] = sdfValues[sdfValues < distances] 
+        # normals[sdfValues < distances,:] = sdfGradients[sdfValues < distances,:]
+        # distances[sdfValues < distances] = sdfValues[sdfValues < distances] 
         if mode == 'regular':
             boundaryPosition, boundaryVolume, boundaryDistance, boundaryNormal = sampleSDF_regular(sdf, config)
         else:
@@ -825,16 +854,19 @@ def sampleBoundaryParticles(particleState, sdfs, config, modes = ['regular']):
         boundaryNormals.append(boundaryNormal.to(config['compute']['device']).to(config['compute']['dtype']))
         boundaryBodyIDs.append(boundaryPosition.new_ones(boundaryPosition.shape[0]).to(config['compute']['device']) * i)
 
+
     boundaryPositions = torch.cat(boundaryPositions, dim = 0)
     boundaryVolumes = torch.cat(boundaryVolumes, dim = 0)
     boundaryDistances = torch.cat(boundaryDistances, dim = 0)
     boundaryNormals = torch.cat(boundaryNormals, dim = 0)
     boundaryBodyIDs = torch.cat(boundaryBodyIDs, dim = 0)
 
-    particleState['distances'] = distances
-    particleState['normals'] = normals
 
-    return boundaryPositions, boundaryVolumes, boundaryDistances, boundaryNormals, boundaryBodyIDs, fluidMask
+
+    # particleState['distances'] = distances
+    # particleState['normals'] = normals
+
+    return boundaryPositions, boundaryVolumes, boundaryBodyIDs, fluidMask
 
 # boundaryParticles, boundaryVolumes, boundaryDistances, boundaryNormals, boundaryBodyIDs, fluidMask = sampleBoundaryParticles(fluidState, [sdf], config, 'sdf')
 
@@ -850,11 +882,22 @@ def processBoundarySDFs(fluidState, config, sdfs, samplings = None):
     if not isinstance(samplings, List):
         samplings = [samplings for _ in sdfs]
         
-    boundaryParticles, boundaryVolumes, boundaryDistances, boundaryNormals, boundaryBodyIDs, fluidMask = sampleBoundaryParticles(fluidState, sdfs, config, samplings)
+    boundaryParticles, boundaryVolumes, boundaryBodyIDs, fluidMask = sampleBoundaryParticles(fluidState, sdfs, config, samplings)
     for k in fluidState:
         if isinstance(fluidState[k], torch.Tensor):
             fluidState[k] = fluidState[k][fluidMask]
     fluidState['numParticles'] = fluidState['positions'].shape[0]
+
+
+    combined_sdf = sdfs[0]
+    for sdf in sdfs[1:]:
+        combined_sdf = operatorDict['union'](combined_sdf, sdf)
+
+
+    _, _, sdfValues, sdfGradients = filterParticlesWithSDF(boundaryParticles, operatorDict['invert'](combined_sdf), config['particle']['support'], 1e-4)
+
+
+
 
     boundaryState = {
         'positions': boundaryParticles,
@@ -870,10 +913,12 @@ def processBoundarySDFs(fluidState, config, sdfs, samplings = None):
 
         'numParticles': boundaryParticles.shape[0],
 
-        'distances': -boundaryDistances,
-        'normals': boundaryNormals,
+        'distances': -sdfValues,
+        'normals': sdfGradients,
         'bodyIDs': boundaryBodyIDs,
     }
+
+
 
     _, boundaryState['neighborhood'] = neighborSearch(boundaryState, boundaryState, config)
     _, boundaryState['numNeighbors'] = countUniqueEntries(boundaryState['neighborhood']['indices'][0], boundaryState['positions'])
