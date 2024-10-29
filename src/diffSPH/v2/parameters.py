@@ -15,6 +15,7 @@ fluidParameters = [
     Parameter('fluid', 'rho0', float, 1000, required = False, export = True),
     Parameter('fluid', 'mu', float, 0.1, required = False, export = True),
     Parameter('fluid', 'cs', float, 10, required = False, export = True),
+    Parameter('fluid', 'u_mag', float, -1, required = False, export = True),
 ]
 
 simulationParameters = [
@@ -72,6 +73,8 @@ plotStateDict = [
 
 boundaryParameters = [
     Parameter('boundary', 'active', bool, False, required = False, export = True, hint='Boundary condition active'),
+    Parameter('boundary', 'boundary_width', int, 5, required = False, export = True, hint='Boundary width'),
+    Parameter('boundary', 'potentialBuffer', int, 5, required = False, export = True, hint='Potential buffer'),
     Parameter('boundary', 'type', str, 'mDBC', required = False, export = True, hint='Boundary condition type'),
     Parameter('boundary', 'static', bool, True, required = False, export = True, hint='Static boundary condition'),
     Parameter('boundary', 'twoWayCoupled', bool, False, required = False, export = True, hint='Two-way coupled boundary condition'),
@@ -148,6 +151,14 @@ def parseParticleConfig(config: dict):
         dx = torch.min(dx)
     else:
         dx = torch.tensor(config['particle']['dx'], dtype = config['compute']['dtype'], device = config['compute']['device'])
+
+    if 'boundary_width' in config['boundary'] and config['boundary']['active']:
+        nx = nx + 2 * config['boundary']['boundary_width']
+        config['particle']['nx'] = nx
+        config['domain']['minExtent'] -= config['boundary']['boundary_width'] * dx
+        config['domain']['maxExtent'] += config['boundary']['boundary_width'] * dx
+        domainExtent = config['domain']['maxExtent'] - config['domain']['minExtent']
+
     volume = dx**config['domain']['dim']
 
     if config['kernel']['targetNeighbors'] == -1:
@@ -194,6 +205,12 @@ def parseDefaultParameters(config):
     config['kernel']['kernelScale'] = config['particle']['support'] / (2 * config['particle']['dx'])
     config['particle']['smoothingLength'] = 2 * config['particle']['dx']
     config['noise']['n'] = config['particle']['nx']
+
+    if config['fluid']['u_mag'] > 0:
+        config['fluid']['cs'] = config['fluid']['u_mag'] * 10
+    else:
+        config['fluid']['u_mag'] = config['fluid']['cs'] / 10
+
     # for plot in config['plot']['plots']:
         # for parameter in plotStateDict:
             # parameter.parseConfig(config['plot']['plots'][plot])
@@ -203,14 +220,21 @@ def parseDefaultParameters(config):
     # print(config)
     
 
-from diffSPH.v2.modules.viscosity import computeViscosityParameter
+from diffSPH.v2.modules.viscosity import computeViscosityParameter, setViscosityParameters
 from diffSPH.v2.moduleWrapper import modules
 def parseModuleParameters(config):
     for module in modules:
         params = module.getParameters()
         for param in params:
             param.parseConfig(config)
+
+    # print(config)
+
     config['diffusion']['nu_sph'] = computeViscosityParameter(None, config)
+    if 'targetRe' in config['diffusion']:
+        if config['diffusion']['targetRe'] > 0:
+            L = config['domain']['maxExtent'][0] - config['domain']['minExtent'][0]
+            setViscosityParameters(config, config['diffusion']['targetRe'], L, abs(config['fluid']['u_mag']))
     config['shifting']['solverThreshold'] = config['particle']['dx'] / 2 if config['shifting']['solverThreshold'] < 0 else config['shifting']['solverThreshold']
     
     if 'boundaryDiffusion' in config:

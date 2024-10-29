@@ -499,7 +499,7 @@ def generateRamp(perennialState, regions, config):
     for sdf in boundary_sdfs[1:]:
         combined_sdf = operatorDict['union'](combined_sdf, sdf)
 
-    ramp = rampDivergenceFree(perennialState['fluid']['positions'], torch.ones_like(perennialState['fluid']['densities']), combined_sdf, offset = config['particle']['dx']/2, d0 = 10 * perennialState['fluid']['supports'])
+    ramp = rampDivergenceFree(perennialState['positions'], torch.ones_like(perennialState['densities']), combined_sdf, offset = config['particle']['dx']/2, d0 = config['boundary']['potentialBuffer'] * perennialState['supports'])
     return ramp
 
 def filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree'):
@@ -511,6 +511,16 @@ def filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree'):
 import copy
 from diffSPH.v2.modules.shifting import solveShifting
 from diffSPH.v2.util import printState
+
+def generateRamp(perennialState, regions, config):
+    boundary_sdfs = [region['sdf'] for region in regions if region['type'] == 'boundary']
+    combined_sdf = boundary_sdfs[0]
+    for sdf in boundary_sdfs[1:]:
+        combined_sdf = operatorDict['union'](combined_sdf, sdf)
+
+    ramp = rampDivergenceFree(perennialState['positions'], torch.ones_like(perennialState['densities']), combined_sdf, offset = config['particle']['dx']/2, d0 = config['boundary']['potentialBuffer'] * perennialState['supports'])
+    return ramp
+
 def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = False):
     particlesA, volumeA = sampleRegular(config['particle']['dx'], config['domain']['dim'], config['domain']['minExtent'], config['domain']['maxExtent'], config['kernel']['targetNeighbors'], config['simulation']['correctArea'], config['kernel']['function'])
     particlesA = particlesA.to(config['compute']['device'])
@@ -625,11 +635,12 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
     boundary_sdfs = [sdf['sdf'] for sdf in sdfs if sdf['type'] == 'boundary' ]   
     
     if len(boundary_sdfs) > 0:
-        print('Sampling boundary particles')
-        print(noiseState['numParticles'])
+        # print('Sampling boundary particles')
+        # print(noiseState['numParticles'])
         boundaryParticles, boundaryVolumes, boundaryBodyIDs, fluidMask = sampleBoundaryParticles(noiseState, boundary_sdfs, config, samplings)
         print(fluidMask.shape)
         for k in noiseState.keys():
+            # print(k)
             if isinstance(noiseState[k], torch.Tensor):
                 noiseState[k] = noiseState[k][fluidMask]
         noiseState['numParticles'] = noiseState['positions'].shape[0]
@@ -648,6 +659,11 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
     # printState(noiseState)
     
     # printState(noiseState)
+    if config['boundary']['active']:
+        ramp = generateRamp(noiseState, config['regions'], config)
+        noiseState['ramp'] = ramp
+        noiseState['intiailPotential'] = noiseState['potential'].clone()
+        noiseState['potential'] = noiseState['potential'] * ramp
 
     # for sdf in boundary_sdfs:
     #     # _, maskA, _, _ = filterParticlesWithSDF(particlesA, operatorDict['invert'](sdf), config['particle']['support'], -1e-4)
@@ -655,7 +671,13 @@ def sampleNoisyParticles(noiseConfig, config, sdfs = [], randomizeParticles = Fa
         # noiseState['potential'] = filterPotentialField(sdf, noiseState, config, kind = 'divergenceFree')
 
 
+
+
     noiseState['velocities'], noiseState['divergence'] = sampleVelocityField(noiseState, noiseState['neighborhood'])
+
+    u_max = torch.linalg.norm(noiseState['velocities'], dim = 1).max() + 1e-6
+    u_factor = config['fluid']['u_mag'] / u_max
+    noiseState['velocities'] = noiseState['velocities'] * u_factor
     # if mask is None:
         # mask = torch.ones_like(noiseState['potential'], dtype = torch.bool)
     # for sdf_func in boundary_sdfs:
@@ -1053,3 +1075,15 @@ def generateInitialConditions(particleState, config, verbose = False):
             break
 
     return state
+
+
+from scipy import interpolate
+def getNoiseSampler(config):
+    _, noise = sampleNoise(config['noise'])
+
+    minDomain = config['domain']['minExtent'].cpu().numpy()
+    maxDomain = config['domain']['maxExtent'].cpu().numpy()
+    noiseN = config['noise']['n']
+    noiseSampler = interpolate.RegularGridInterpolator((np.linspace(minDomain[0],maxDomain[0],noiseN), np.linspace(minDomain[1],maxDomain[1],noiseN)), noise.cpu().numpy(), bounds_error = False, fill_value = None, method = 'linear')
+
+    return lambda x: torch.tensor(noiseSampler((x[:,0].cpu().numpy(), x[:,1].cpu().numpy()))).to(x.device).type(x.dtype)

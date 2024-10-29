@@ -1,0 +1,79 @@
+[timestep]
+fixed = true
+dt = 1e-3
+
+[domain]
+adjustParticle = false
+adjustDomain = false
+dim = 2
+periodic = false
+minExtent = [-0.5, -0.5]
+maxExtent = [0.5, 0.5]
+
+[shifting]
+scheme = 'deltaSPH'
+threshold = 0.05
+maxIterations = 1
+freeSurface = false
+
+[sps]
+active = true
+
+[diffusion]
+velocityScheme = 'deltaSPH_inviscid'
+targetRe = -1000
+pi-switch = false
+
+[plot]
+mosaic = 'AB'
+figSize = [10, 5.5]
+fps = 0
+updateInterval = 16
+export = false
+
+[plot.plots]
+[plot.plots.A]
+quantity = 'index'
+cbar = true
+cmap = 'twilight'
+scaling = 'lin'
+s = 1
+gridVisualization = false
+title = 'Particle Index'
+[plot.plots.B]
+quantity = 'velocities'
+cbar = true
+cmap = 'viridis'
+scaling = 'lin'
+mapping = 'L2'
+s = 1
+gridVisualization = true
+title = '$|\mathbf{u}|_2$'
+streamLines = true
+
+[plot.plotsAlt.B]
+quantity = 'velocities'
+cbar = true
+cmap = 'icefire'
+scaling = 'sym'
+operation = 'curl'
+s = 1
+gridVisualization = true
+title = '$\nabla\times\mathbf{u}$'
+streamLines = true
+
+[export]
+active = false
+
+[boundary]
+active = true
+boundary_width = 5
+
+[particle]
+nx = 128
+
+[gravity]
+active = false
+
+[integration]
+scheme = 'symplecticEuler'

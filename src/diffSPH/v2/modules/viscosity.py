@@ -278,5 +278,6 @@ def getParameters():
         Parameter('diffusion', 'pi-switch', bool, False, required = False,export = False, hint = 'Switches velocity diffusion off for separating particles'),
         Parameter('diffusion', 'artificial-constant', float, 0.02, required = False,export = False, hint = 'Artificial viscosity constant for XSPH'),
         Parameter('diffusion', 'eps', float, 1e-6, required = False,export = False, hint = 'Epsilon value for the viscosity term'),
+        Parameter('diffusion', 'targetRe', float, -1, required = False,export = False, hint = 'Target Reynolds number for the simulation'),
 
     ]

@@ -356,10 +356,11 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                     # dudt = (k1 + 2*k2 + 2*k3 + k4) * dt / 6
         elif scheme == 'symplecticEuler':
             with record_function("[Simulation] - Symplectic Euler"):
+                
                     fluidUpdate_initial, boundaryUpdate_initial = simulationStep(tempState, config)
 
                     tempState = createTempState(perennialState, tempState)
-                    updateStates(dt / 2, (fluidUpdate_initial, boundaryUpdate_initial), tempState['fluid'], tempState['boundary'] if 'boundary' in tempState else None)
+                    updateStates(dt / 2, (fluidUpdate_initial, None), tempState['fluid'], tempState['boundary'] if 'boundary' in tempState else None)
                     
                     fluidUpdate_halfStep, boundaryUpdate_halfStep = simulationStep(tempState, config)
 
@@ -370,7 +371,7 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                     dxdt_half = fluidUpdate_halfStep[0]
                     dxdt_initial = fluidUpdate_initial[0]
 
-                    newVelocities = dxdt_half + dudt * dt
+                    newVelocities = perennialState['fluid']['velocities'] + dudt * dt
 
                     dxdt = 0.5 * (perennialState['fluid']['velocities'] + newVelocities) * dt
 

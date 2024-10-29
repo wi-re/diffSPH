@@ -8,7 +8,13 @@ from diffSPH.v2.sphOps import adjunctMatrix, LiuLiuConsistent
 
 def buildBoundaryGhostParticles(perennialState, config):
     boundaryParticlePositions = perennialState['boundary']['positions'] 
-    ghostParticlePositions = boundaryParticlePositions + 2 * perennialState['boundary']['distances'].view(-1,1) * perennialState['boundary']['normals'] 
+    distance = perennialState['boundary']['distances']
+    mappingDistance = distance + torch.maximum(perennialState['boundary']['distances'], -torch.ones_like(perennialState['boundary']['distances']) * config['particle']['support'])
+    # print(f'Mapping Distance: {mappingDistance.min().item()} - {mappingDistance.max().item()}, {mappingDistance}')
+
+
+
+    ghostParticlePositions = boundaryParticlePositions + mappingDistance.view(-1,1) * perennialState['boundary']['normals'] 
 
     boundaryGhostState = {
         'positions': ghostParticlePositions,
@@ -270,3 +276,4 @@ def mDBCDensity(perennialState, config):
 #     # print(f'neighCounts: {neighCounts.min().item()} - {neighCounts.max().item()} mean: {neighCounts.median().item()}')
 
 #     return boundaryDensity, shepardDensity
+

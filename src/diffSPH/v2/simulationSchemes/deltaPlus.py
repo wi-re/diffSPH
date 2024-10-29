@@ -1,5 +1,6 @@
 from diffSPH.v2.modules.pressureForce import computePressureAccelSwitch
 from diffSPH.v2.modules.surfaceDetection import computeNormalsMaronne, detectFreeSurfaceMaronne
+from diffSPH.v2.modules.deltaSPH import computeDeltaU
 
 # from diffSPH.v2.modules.neighborhood import fluidNeighborSearch
 from diffSPH.v2.sphOps import sphOperationStates
@@ -328,7 +329,7 @@ def simulationStep(state, config):
                 checkNaN(state['boundary']['pressureAccel'], 'boundary - pressureAccel')
         else:
             state['fluid']['pressureAccel'], _ = callModule(state, computePressureAccel, config, 'fluid')
-            state['fluid']['pressureAccel'], _ = callModule(state, computePressureAccelNonConservative, config, 'fluid')
+            # state['fluid']['pressureAccel'], _ = callModule(state, computePressureAccelNonConservative, config, 'fluid')
             checkNaN(state['fluid']['pressureAccel'], 'pressureAccel')
         # torch.cuda.synchronize()
     # state['fluid']['divergence'], state['boundary']['divergence'] = callModule(state, computePressureAccel, config, 'all')
@@ -356,6 +357,31 @@ def simulationStep(state, config):
             checkNaN(dudt, 'dudt')
             checkNaN(drhodt, 'drhodt')
         
+        # delta_u = computeDeltaU(state['fluid'], config)
+        # checkNaN(delta_u, 'delta_u')
+
+        # stateA = state['fluid']
+        # stateB = state['fluid']
+        # neighborhood = state['fluid']['neighborhood']
+
+        # drhodt += sphOperationStates(stateA, stateB, (delta_u * stateA['densities'].view(-1,1), delta_u * stateA['densities'].view(-1,1)), neighborhood=neighborhood, operation='divergence', gradientMode = 'difference') / stateA['densities']
+        # drhodt += sphOperationStates(stateA, state['boundary'],  (delta_u * stateA['densities'].view(-1,1), torch.zeros_like(delta_u)), neighborhood=neighborhood, operation='divergence', gradientMode = 'summation') / stateA['densities']
+
+        # checkNaN(drhodt, 'drhodt')
+
+        # cross = torch.einsum('nu, nv -> nuv', stateA['velocities'], delta_u)
+        # checkNaN(cross, 'cross')
+        # dudt += sphOperationStates(stateA, stateB, (cross, cross), neighborhood=neighborhood, operation='divergence', gradientMode = 'summation')
+        # checkNaN(dudt, 'dudt')
+        # dudt += sphOperationStates(stateA, state['boundary'],  (cross, torch.zeros_like(cross)), neighborhood=neighborhood, operation='divergence', gradientMode = 'summation')
+
+        # term = sphOperationStates(stateA, stateB, (delta_u, torch.zeros_like(delta_u)), neighborhood=neighborhood, operation='divergence', gradientMode = 'summation')
+        # checkNaN(term, 'term')
+
+        # # prod = torch.einsum('nu, nuv -> nu', stateA['velocities'], term)
+        # dudt -= stateA['velocities'] * term.view(-1,1)
+
+        # dxdt += delta_u
 
         if 'regions' in config and  config['regions'] is not None:
             if state['outletGhost'] is not None:
