@@ -213,6 +213,7 @@ def computeGradient(fx, extent, dim = 2, accuracy = 1):
 def stencilFunction(fn, p, stencil, dx, dim, order):
     # print('p', p.shape)
     # print('stencil', stencil.shape, stencil)
+    stencil = stencil.to(p.device)
 
     offsets = p.new_zeros(stencil.shape[0], p.shape[1])
     offsets[:,dim] = stencil

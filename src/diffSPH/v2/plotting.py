@@ -377,6 +377,8 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
         if 'log'in scaling:
             norm = matplotlib.colors.SymLogNorm(vmin = minScale, vmax = maxScale, linthresh = linthresh)
         else:
+            if midPoint == 'mean':
+                midPoint = torch.mean(quantity).cpu().detach().item()
             minScale = - torch.max(torch.abs(quantity - midPoint))
             maxScale =   torch.max(torch.abs(quantity - midPoint))
             norm = matplotlib.colors.CenteredNorm(vcenter = midPoint, halfrange = maxScale)
@@ -417,6 +419,9 @@ def visualizeParticleQuantity(fig, axis, config, visualizationState, quantity: U
             grid_uy = mapToGrid(visualizationState, inputQuantity[:,1])
             X = visualizationState['X']
             Y = visualizationState['Y']
+
+            # print(f'X: {X.shape}, Y: {Y.shape}, grid_ux: {grid_ux.shape}, grid_uy: {grid_uy.shape}')
+            # print(X)
 
             stream = axis.streamplot(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), grid_ux.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), grid_uy.reshape(visualizationState['nGrid'], visualizationState['nGrid']).detach().cpu().numpy(), color='k', linewidth=1, density=1, arrowstyle='->', arrowsize=0.5)
 
@@ -473,6 +478,8 @@ def visualizeParticles(fig, axis, config, visualizationState, inputQuantity, map
         if 'log'in scaling:
             norm = matplotlib.colors.SymLogNorm(vmin = minScale, vmax = maxScale, linthresh = linthresh)
         else:
+            if midPoint == 'mean':
+                midPoint = torch.mean(quantity).cpu().detach().item()
             minScale = - torch.max(torch.abs(quantity - midPoint))
             maxScale =   torch.max(torch.abs(quantity - midPoint))
             norm = matplotlib.colors.CenteredNorm(vcenter = midPoint, halfrange = maxScale)
@@ -615,6 +622,8 @@ def updatePlot(plotState, visualizationState, quantity : Union[str, torch.Tensor
         if 'log'in scaling:
             norm = matplotlib.colors.SymLogNorm(vmin = minScale, vmax = maxScale, linthresh = linthresh)
         else:
+            if midPoint == 'mean':
+                midPoint = torch.mean(qcpu).cpu().detach().item()
             minScale = - torch.max(torch.abs(qcpu - midPoint))
             maxScale =   torch.max(torch.abs(qcpu - midPoint))
             norm = matplotlib.colors.CenteredNorm(vcenter = midPoint, halfrange = maxScale)

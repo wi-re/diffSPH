@@ -3,10 +3,19 @@ import torch
 import numpy as np
 from diffSPH.v2.modules.neighborhood import neighborSearch
 
+def getModPositions(x, config):
+    periodicity = config['domain']['periodicity']
+    minDomain = config['domain']['minExtent']
+    maxDomain = config['domain']['maxExtent']
+    # periodicity = torch.tensor([False] * x.shape[1], dtype = torch.bool).to(x.device)
+    mod_positions = torch.stack([x[:,i] if not periodic_i else torch.remainder(x[:,i] - minDomain[i], maxDomain[i] - minDomain[i]) + minDomain[i] for i, periodic_i in enumerate(periodicity)], dim = 1)
+    return mod_positions
 
 def processOutlet(region, config, perennialState):
+    mod_positions = perennialState['fluid']['positions']
+
     outletSDF = region['sdf']
-    dist = outletSDF(perennialState['fluid']['positions'])
+    dist = outletSDF(mod_positions)
     mask = dist < 0
     reducedIndices = torch.arange(perennialState['fluid']['positions'].shape[0], device = perennialState['fluid']['positions'].device, dtype =  torch.int64)[~mask]
 
@@ -23,8 +32,9 @@ def processOutlet(region, config, perennialState):
     perennialState['fluid']['numParticles'] = perennialState['fluid']['positions'].shape[0]
 
 def processForcing(region, config, perennialState):
+    mod_positions = perennialState['fluid']['positions']
     outletSDF = region['sdf']
-    dist = outletSDF(perennialState['fluid']['positions'])
+    dist = outletSDF(mod_positions)
     mask = dist < 0
     reducedIndices = torch.arange(perennialState['fluid']['positions'].shape[0], device = perennialState['fluid']['positions'].device, dtype =  torch.int64)[mask]
 
@@ -33,6 +43,7 @@ def processForcing(region, config, perennialState):
     
     perennialState['fluid']['velocities'][reducedIndices,0] = region['velocity'][0]
     perennialState['fluid']['velocities'][reducedIndices,1] = region['velocity'][1]
+    perennialState['fluid']['densities'][reducedIndices] = config['fluid']['rho0']
 
 
 
@@ -63,7 +74,8 @@ def buildOutletGhostParticles(regions, perennialState, config):
             continue
             # ghostState = copy.deepcopy(region)
         outletSDF = region['sdf']
-        dist = outletSDF(perennialState['fluid']['positions'])
+        mod_positions = perennialState['fluid']['positions']
+        dist = outletSDF(mod_positions)
         mask = dist < 0
         reducedIndices = torch.arange(perennialState['fluid']['positions'].shape[0], device = perennialState['fluid']['positions'].device, dtype =  torch.int64)[mask]
 
@@ -76,7 +88,9 @@ def buildOutletGhostParticles(regions, perennialState, config):
         j = torch.arange(i.shape[0], device = i.device, dtype = i.dtype)
         pos = perennialState['fluid']['positions'][reducedIndices]
 
-        dist = outletSDF(pos)
+        mod_pos = getModPositions(pos, config)
+
+        dist = outletSDF(mod_pos)
 
         grad = continuousGradient(outletSDF, pos, stencil = centralDifferenceStencil(1,2), dx = config['particle']['support']*0.01, order = 1)
         grad = grad / (torch.linalg.norm(grad, dim = 1, keepdim = True) + 1e-7)
@@ -166,6 +180,10 @@ def processInlet(perennialState, config, emitter):
     newParticleState['velocities'][:,0] = emitter['velocity'][0]
     newParticleState['velocities'][:,1] = emitter['velocity'][1]
     
+    if 'initialPositions' in perennialState['fluid']:
+        # print('...', newParticleState['positions'])
+        newParticleState['initialPositions'] = newParticleState['positions'].clone()
+
     # print(f'Adding {newParticleState["numParticles"]} particles (total {perennialState["fluid"]["numParticles"] + newParticleState["numParticles"]})')
     perennialState['uidCounter'] += newParticleState['numParticles']
 
