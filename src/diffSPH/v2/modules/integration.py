@@ -48,7 +48,7 @@ def createTempState(perennialState, tempState_prior = None):
             tempState['fluid']['neighborhood'] = tempState_prior['fluid']['neighborhood']
         if 'datastructure' in tempState_prior['fluid']:
             tempState['fluid']['datastructure'] = tempState_prior['fluid']['datastructure']
-        if 'boundary'in tempState:
+        if 'boundary'in tempState and tempState['boundary'] is not None:
 
             if 'neighborhood' in tempState_prior['boundary']:
                 tempState['boundary']['neighborhood'] = tempState_prior['boundary']['neighborhood']
@@ -283,8 +283,8 @@ def integrate(simulationStep, perennialState, config, previousStep = None):
                     if fluidUpdate_k1[2] is not None:
                         drhodt = (fluidUpdate_k1[2] + 2 * fluidUpdate_k2[2] + 2 * fluidUpdate_k3[2] + fluidUpdate_k4[2]) / 6
 
-                        print(f'Density Mean: k1 {torch.mean(fluidUpdate_k1[2])}, k2 {torch.mean(fluidUpdate_k2[2])}, k3 {torch.mean(fluidUpdate_k3[2])}, k4 {torch.mean(fluidUpdate_k4[2])}\t Total: {torch.mean(drhodt)}')
-                        print(f'Density Sum: k1 {torch.sum(fluidUpdate_k1[2])}, k2 {torch.sum(fluidUpdate_k2[2])}, k3 {torch.sum(fluidUpdate_k3[2])}, k4 {torch.sum(fluidUpdate_k4[2])}\t Total: {torch.sum(drhodt)}')
+                        # print(f'Density Mean: k1 {torch.mean(fluidUpdate_k1[2])}, k2 {torch.mean(fluidUpdate_k2[2])}, k3 {torch.mean(fluidUpdate_k3[2])}, k4 {torch.mean(fluidUpdate_k4[2])}\t Total: {torch.mean(drhodt)}')
+                        # print(f'Density Sum: k1 {torch.sum(fluidUpdate_k1[2])}, k2 {torch.sum(fluidUpdate_k2[2])}, k3 {torch.sum(fluidUpdate_k3[2])}, k4 {torch.sum(fluidUpdate_k4[2])}\t Total: {torch.sum(drhodt)}')
                     if 'regions' in config and config['regions'] is not None:
                     
                         mirrorRegions = [region for region in config['regions'] if region['type'] == 'mirror']

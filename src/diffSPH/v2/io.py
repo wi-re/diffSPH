@@ -27,6 +27,8 @@ def createOutputFile(config):
         configGroup.create_group(key)
         for subkey in config[key]:
             # print(f'Writing {key}/{subkey}')
+            if key == 'regions':
+                continue
             val = config[key][subkey]
             if isinstance(val, torch.Tensor):
                 val = val.detach().cpu().numpy()
@@ -47,11 +49,6 @@ def createOutputFile(config):
             configGroup[key].attrs[subkey] = val
 
     # f.close()
-    # boundaryGroup = f.create_group('boundaryInformation')
-    # boundaryGroup.create_dataset('boundaryPosition', [])
-    # boundaryGroup.create_dataset('boundaryNormal', [])
-    # boundaryGroup.create_dataset('boundaryArea', [])
-    # boundaryGroup.create_dataset('boundaryVelocity', [])
     simulationDataGroup = f.create_group('simulationExport')
 
     return f, simulationDataGroup
@@ -75,4 +72,12 @@ def writeFrame(simulationDataGroup, perennialState, priorState, frameStatistics,
     frameGroup.create_dataset('fluidShiftAmount', data = perennialState['fluid']['shiftAmount'].detach().cpu().numpy())
     frameGroup.create_dataset('UID', data = perennialState['fluid']['index'].detach().cpu().numpy())
     
+    if 'boundary' in perennialState and perennialState['boundary'] is not None:
+        frameGroup.create_dataset('boundaryPosition', data = priorState['boundary']['positions'].detach().cpu().numpy())
+        frameGroup.create_dataset('boundaryVelocity', data = priorState['boundary']['velocities'].detach().cpu().numpy())
+        frameGroup.create_dataset('boundaryDensity', data = priorState['boundary']['densities'].detach().cpu().numpy() / config['fluid']['rho0'])
+        frameGroup.create_dataset('boundaryUID', data = priorState['boundary']['index'].detach().cpu().numpy())
+        
+        # frameGroup.create_dataset('boundaryUID', data = priorState['boundary']['index'].detach().cpu().numpy())
+
     # frameGroup.create_dataset('boundaryDensity', [])
