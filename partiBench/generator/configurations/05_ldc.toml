@@ -7,8 +7,8 @@ adjustParticle = false
 adjustDomain = false
 dim = 2
 periodic = false
-minExtent = [-1, -1]
-maxExtent = [1, 1]
+minExtent = [-0.5, -0.5]
+maxExtent = [0.5, 0.5]
 
 [shifting]
 scheme = 'deltaSPH'

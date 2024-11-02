@@ -133,7 +133,7 @@ circle_sdf = lambda points: getSDF('circle')['function'](points, torch.tensor(l)
 translated_sdf = operatorDict['translate'](circle_sdf, torch.tensor([0.,0.]))
 boundary_sdf2 = lambda points: translated_sdf(points.cpu()).to(points.device)
 
-fluid_sdf = lambda points: getSDF('box')['function'](points, torch.tensor([1, 1]).to(points.device))
+fluid_sdf = lambda points: getSDF('box')['function'](points, torch.tensor([1/2, 1/2]).to(points.device))
 # fluid_sdf = operatorDict['translate'](sphere_b, torch.tensor([-2 + 1/2, - 1/2]))
 
 if args.boundary != 'none':
