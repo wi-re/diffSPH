@@ -114,11 +114,11 @@ def computeViscosityPrice2012(stateA, stateB, neighborhood, config):
     
 from diffSPH.v2.compiler import compileSourceFiles
 
-sphOperation_cpp = compileSourceFiles(
-    ['/home/winchenbach/dev/diffSPH/partiBench/viscosityKernel.cpp', '/home/winchenbach/dev/diffSPH/partiBench/viscosityKernel.cu'], module_name = 'viscosityOperations', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
-# from torch.utils.cpp_extension import load
+# sphOperation_cpp = compileSourceFiles(
+#     ['/home/winchenbach/dev/diffSPH/partiBench/viscosityKernel.cpp', '/home/winchenbach/dev/diffSPH/partiBench/viscosityKernel.cu'], module_name = 'viscosityOperations', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
+# # from torch.utils.cpp_extension import load
 
-viscosityKernel_cpp = sphOperation_cpp.viscosityKernel
+# viscosityKernel_cpp = sphOperation_cpp.viscosityKernel
 
 def computeViscosityDeltaSPH_inviscid(stateA, stateB, neighborhood, config):
     with record_function("[SPH] - Fluid Viscosity [deltaSPH inviscid]"):
