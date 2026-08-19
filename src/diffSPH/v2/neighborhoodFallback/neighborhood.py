@@ -22,7 +22,7 @@ def radiusSearch(
         returnStructure : bool = False
         ):
     
-    assert algorithm in ['naive'], f'algorithm = {algorithm} not supported'
+    # assert algorithm in ['naive'], f'algorithm = {algorithm} not supported'
     assert mode in ['symmetric', 'scatter', 'gather'], f'mode = {mode} not supported'
     assert queryPositions.shape[1] == referencePositions.shape[1] if referencePositions is not None else True, f'queryPositions.shape[1] = {queryPositions.shape[1]} != referencePositions.shape[1] = {referencePositions.shape[1]}'
     assert hashMapLength > 0, f'hashMapLength = {hashMapLength} <= 0'
@@ -89,32 +89,32 @@ def radiusSearch(
     if domainMax is None:
         domainMax = torch.ones(queryPositions.shape[1], device = queryPositions.device)
     if supportRadius is not None:
-        if algorithm == 'naive':
-            if verbose:
-                print('Calling radiusNaiveFixed, arguments:')
-                print(f'queryPositions = {queryPositions.shape} on {queryPositions.device}')
-                print(f'referencePositions = {referencePositions.shape} on {referencePositions.device}')
-                print(f'supportRadius = {supportRadius}')
-                print(f'periodicTensor = {periodicTensor}')
-                print(f'domainMin = {domainMin.shape} on {domainMin.device}')
-                print(f'domainMax = {domainMax.shape} on {domainMax.device}')
-            return radiusNaiveFixed(x, y, supportRadius, periodicTensor, domainMin, domainMax)
-        else:
-            raise ValueError(f'algorithm = {algorithm} not supported')
+        # if algorithm == 'naive':
+        #     if verbose:
+        #         print('Calling radiusNaiveFixed, arguments:')
+        #         print(f'queryPositions = {queryPositions.shape} on {queryPositions.device}')
+        #         print(f'referencePositions = {referencePositions.shape} on {referencePositions.device}')
+        #         print(f'supportRadius = {supportRadius}')
+        #         print(f'periodicTensor = {periodicTensor}')
+        #         print(f'domainMin = {domainMin.shape} on {domainMin.device}')
+        #         print(f'domainMax = {domainMax.shape} on {domainMax.device}')
+        return radiusNaiveFixed(x, y, supportRadius, periodicTensor, domainMin, domainMax)
+        # else:
+        #     raise ValueError(f'algorithm = {algorithm} not supported')
     else:
-        if algorithm == 'naive':
-            if verbose:
-                print('Calling radiusNaive, arguments:')
-                print(f'queryPositions = {queryPositions.shape} on {queryPositions.device}')
-                print(f'querySupport = {querySupport.shape} on {querySupport.device}')
-                print(f'referencePositions = {referencePositions.shape} on {referencePositions.device}')
-                print(f'referenceSupport = {referenceSupport.shape} on {referenceSupport.device}')
-                print(f'periodicTensor = {periodicTensor}')
-                print(f'domainMin = {domainMin.shape} on {domainMin.device}')
-                print(f'domainMax = {domainMax.shape} on {domainMax.device}')
-            return radiusNaive(x, y, querySupport, referenceSupport, periodicTensor, domainMin, domainMax, mode)
-        else:
-            raise ValueError(f'algorithm = {algorithm} not supported')
+        # if algorithm == 'naive':
+        if verbose:
+            print('Calling radiusNaive, arguments:')
+            print(f'queryPositions = {queryPositions.shape} on {queryPositions.device}')
+            print(f'querySupport = {querySupport.shape} on {querySupport.device}')
+            print(f'referencePositions = {referencePositions.shape} on {referencePositions.device}')
+            print(f'referenceSupport = {referenceSupport.shape} on {referenceSupport.device}')
+            print(f'periodicTensor = {periodicTensor}')
+            print(f'domainMin = {domainMin.shape} on {domainMin.device}')
+            print(f'domainMax = {domainMax.shape} on {domainMax.device}')
+        return radiusNaive(x, y, querySupport, referenceSupport, periodicTensor, domainMin, domainMax, mode)
+        # else:
+        #     raise ValueError(f'algorithm = {algorithm} not supported')
     pass
 
 

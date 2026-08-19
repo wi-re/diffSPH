@@ -40,11 +40,11 @@ def buildBoundaryGhostParticles(perennialState, config):
 
 from diffSPH.v2.compiler import compileSourceFiles
 
-mDBC_cpp = compileSourceFiles(
-    ['./cppSrc/mDBC.cpp', './cppSrc/mDBC.cu'], module_name = 'mDBC', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
+# mDBC_cpp = compileSourceFiles(
+    # ['./cppSrc/mDBC.cpp', './cppSrc/mDBC.cu'], module_name = 'mDBC', verbose = False, openMP = True, verboseCuda = False, cuda_arch = None)
 # from torch.utils.cpp_extension import load
 
-mDBCDensity_cpp = mDBC_cpp.mDBC
+mDBCDensity_cpp = None
 
 
 def mDBCDensity(perennialState, config):

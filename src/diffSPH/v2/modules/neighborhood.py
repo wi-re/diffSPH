@@ -347,7 +347,7 @@ def evalNeighborhood(i, j, hij, stateA, stateB : dict, config: dict, computeKern
 from diffSPH.v2.math import mod
 # mode = 'scatter'
 
-from torchCompactRadius.neighborhood import neighborSearch, buildDataStructure, neighborSearchExisting, radiusSearch
+# from torchCompactRadius.neighborhood import neighborSearch, buildDataStructure, neighborSearchExisting, radiusSearch
 
 def searchNeighbors(state, config):    
     # print('fluid - fluid neighbor search')
@@ -489,50 +489,61 @@ from diffSPH.v2.compiler import compileSourceFiles
 
 
 def neighborSearch(queryState, referenceState, config, computeKernels = True, priorState = None, neighborDatastructure = None, verbose = False):
-    if neighborDatastructure is None:
-        if verbose:
-            print(f'Building Datastructure because prior state is None')
-        neighborDatastructure = getNeighborSearchDataStructure(referenceState, config)
-        dirty = True
-    else:
-        neighborDatastructure, dirty = updateDataStructure(referenceState, config, neighborDatastructure, verbose)
-    if neighborDatastructure is None:
+    # if neighborDatastructure is None:
+    #     if verbose:
+    #         print(f'Building Datastructure because prior state is None')
+    #     neighborDatastructure = getNeighborSearchDataStructure(referenceState, config)
+    #     dirty = True
+    # else:
+    #     neighborDatastructure, dirty = updateDataStructure(referenceState, config, neighborDatastructure, verbose)
+    # if neighborDatastructure is None:
 
-        if verbose:
-            print(f'Building Neighborlist because prior state is None')
-        dirty = True
+    #     if verbose:
+    #         print(f'Building Neighborlist because prior state is None')
+    #     dirty = True
     
-    if priorState is not None:
-        if priorState['initialPositions'][0].shape != queryState['positions'].shape:
-            if verbose:
-                print(f'Updating Neighborsearch because of shape mismatch ({priorState["initialPositions"][0].shape} != {queryState["positions"].shape})')
-            dirty = True
-        else:
+    # if priorState is not None:
+    #     if priorState['initialPositions'][0].shape != queryState['positions'].shape:
+    #         if verbose:
+    #             print(f'Updating Neighborsearch because of shape mismatch ({priorState["initialPositions"][0].shape} != {queryState["positions"].shape})')
+    #         dirty = True
+    #     else:
 
-            maxDistance = torch.linalg.norm(priorState['initialPositions'][0] - queryState['positions'], dim = -1).max()
-            minSupport = queryState['supports'].min()
-            if maxDistance * 2 > (config['neighborhood']['verletScale'] - 1) * minSupport:    
-                if verbose:
-                    print(f'Updating Neighborsearch because of distance mismatch ({maxDistance} > {(config["neighborhood"]["verletScale"] - 1) * minSupport})')
-                dirty = True
+    #         maxDistance = torch.linalg.norm(priorState['initialPositions'][0] - queryState['positions'], dim = -1).max()
+    #         minSupport = queryState['supports'].min()
+    #         if maxDistance * 2 > (config['neighborhood']['verletScale'] - 1) * minSupport:    
+    #             if verbose:
+    #                 print(f'Updating Neighborsearch because of distance mismatch ({maxDistance} > {(config["neighborhood"]["verletScale"] - 1) * minSupport})')
+    #             dirty = True
         
-    else:
-        if verbose:
-            print(f'Updating Neighborsearch because priorState is None')
-        dirty = True
+    # else:
+    #     if verbose:
+    #         print(f'Updating Neighborsearch because priorState is None')
+    #     dirty = True
 
 
-    if dirty:
-        neighborhood = neighborSearchExisting(queryState['positions'], queryState['supports'], neighborDatastructure, 'scatter', 1, 'cpp')
+    # if dirty:
+    #     neighborhood = neighborSearchExisting(queryState['positions'], queryState['supports'], neighborDatastructure, 'scatter', 1, 'cpp')
 
-        numNeighbors_full = countUniqueEntries(neighborhood[0], queryState['positions'])[1].to(torch.int32)
-        neighborOffsets_full = torch.hstack((torch.tensor([0], dtype = torch.int32, device = numNeighbors_full.device), torch.cumsum(numNeighbors_full, dim = 0).to(torch.int32)))[:-1]\
+    #     numNeighbors_full = countUniqueEntries(neighborhood[0], queryState['positions'])[1].to(torch.int32)
+    #     neighborOffsets_full = torch.hstack((torch.tensor([0], dtype = torch.int32, device = numNeighbors_full.device), torch.cumsum(numNeighbors_full, dim = 0).to(torch.int32)))[:-1]\
 
     
-    else:
-        neighborhood = priorState['fullIndices']
-        numNeighbors_full = priorState['fullNumNeighbors']
-        neighborOffsets_full = priorState['fullNeighborOffsets']
+    # else:
+    #     neighborhood = priorState['fullIndices']
+    #     numNeighbors_full = priorState['fullNumNeighbors']
+    #     neighborOffsets_full = priorState['fullNeighborOffsets']
+    neighborhood = radiusSearch(
+        getPeriodicPosition(queryState['positions'], config), 
+        getPeriodicPosition(referenceState['positions'], config), 
+        support = (queryState['supports'] * config['neighborhood']['verletScale'], referenceState['supports'] * config['neighborhood']['verletScale']), 
+        fixedSupport = None,
+        periodicity = config['domain']['periodicity'], 
+        domainMin = config['domain']['minExtent'], 
+        domainMax = config['domain']['maxExtent'], 
+        mode = 'scatter', 
+        algorithm = config['neighborhood']['scheme']
+    )
 
     pos_x = getPeriodicPosition(queryState['positions'], config)
     pos_y = getPeriodicPosition(referenceState['positions'], config)
@@ -556,32 +567,32 @@ def neighborSearch(queryState, referenceState, config, computeKernels = True, pr
     # neighborhood_actual = (i, j)
 # torch.cuda.synchronize()
 
-    if dirty:
-        neighborDict = {
-            'indices': neighborhood_actual,
-            'fullIndices': neighborhood,
-            'distances': rij,
-            'vectors': xij,
-            'supports': hij_actual,
-            'initialPositions': (queryState['positions'], referenceState['positions']),
-            'numNeighbors': numNeighbors,
-            'neighborOffsets': neighborOffsets,
-            'fullNumNeighbors': numNeighbors_full,
-            'fullNeighborOffsets': neighborOffsets_full
-        }
-    else:
-        neighborDict = {
-            'indices': neighborhood_actual,
-            'fullIndices': priorState['fullIndices'],
-            'distances': rij,
-            'vectors': xij,
-            'supports': hij_actual,
-            'initialPositions': priorState['initialPositions'],
-            'numNeighbors': numNeighbors,
-            'neighborOffsets': neighborOffsets,
-            'fullNumNeighbors': numNeighbors_full,
-            'fullNeighborOffsets': neighborOffsets_full
-        }
+    # if dirty:
+    neighborDict = {
+        'indices': neighborhood_actual,
+        'fullIndices': neighborhood,
+        'distances': rij,
+        'vectors': xij,
+        'supports': hij_actual,
+        'initialPositions': (queryState['positions'], referenceState['positions']),
+        'numNeighbors': numNeighbors,
+        'neighborOffsets': neighborOffsets,
+        # 'fullNumNeighbors': numNeighbors_full,
+        # 'fullNeighborOffsets': neighborOffsets_full
+    }
+    # else:
+    #     neighborDict = {
+    #         'indices': neighborhood_actual,
+    #         'fullIndices': priorState['fullIndices'],
+    #         'distances': rij,
+    #         'vectors': xij,
+    #         'supports': hij_actual,
+    #         'initialPositions': priorState['initialPositions'],
+    #         'numNeighbors': numNeighbors,
+    #         'neighborOffsets': neighborOffsets,
+    #         'fullNumNeighbors': numNeighbors_full,
+    #         'fullNeighborOffsets': neighborOffsets_full
+    #     }
 
 
     if computeKernels:
